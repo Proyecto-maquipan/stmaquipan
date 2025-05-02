@@ -1,6 +1,12 @@
-// Componente de Gestión de Repuestos
+// Componente de Gestión de Repuestos - Versión Optimizada
 const repuestosComponent = {
     datosTemporales: [],
+    currentPage: 1,
+    itemsPerPage: 50,
+    totalItems: 0,
+    lastVisible: null,
+    searchTerm: '',
+    searchTimeout: null,
     
     async render(container) {
         try {
@@ -12,15 +18,33 @@ const repuestosComponent = {
                         </div>
                     </div>
 
-                    <!-- Botones de acción -->
+                    <!-- Barra de búsqueda y botones -->
                     <div class="row mb-4">
-                        <div class="col-12">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="searchInput" placeholder="Buscar por código o nombre...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="repuestosComponent.buscarRepuestos()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
                             <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addRepuestoModal">
                                 <i class="fas fa-plus me-2"></i>Agregar Repuesto
                             </button>
                             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
                                 <i class="fas fa-upload me-2"></i>Carga Masiva
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Información de registros -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Total de repuestos: <strong id="totalRepuestos">Cargando...</strong>
+                            </div>
                         </div>
                     </div>
 
@@ -37,10 +61,33 @@ const repuestosComponent = {
                                             <th>Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody id="repuestosTableBody">
                                         <!-- Los datos se cargarán dinámicamente -->
                                     </tbody>
                                 </table>
+                            </div>
+                            
+                            <!-- Paginación -->
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center">
+                                        <span>Mostrando </span>
+                                        <select class="form-select mx-2" style="width: auto;" id="itemsPerPageSelect" onchange="repuestosComponent.cambiarItemsPorPagina(this.value)">
+                                            <option value="20">20</option>
+                                            <option value="50" selected>50</option>
+                                            <option value="100">100</option>
+                                            <option value="200">200</option>
+                                        </select>
+                                        <span> registros por página</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <nav aria-label="Paginación de repuestos">
+                                        <ul class="pagination justify-content-end" id="pagination">
+                                            <!-- Botones de paginación se generarán dinámicamente -->
+                                        </ul>
+                                    </nav>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -125,8 +172,11 @@ const repuestosComponent = {
             // Cargar estilos personalizados
             this.agregarEstilos();
             
-            // Cargar datos
-            await this.cargarRepuestos();
+            // Contar total de repuestos
+            await this.contarTotalRepuestos();
+            
+            // Cargar primera página
+            await this.cargarRepuestosPaginados();
             
             // Inicializar eventos
             this.inicializarEventos();
@@ -164,18 +214,51 @@ const repuestosComponent = {
                     padding: 0.25rem 0.5rem;
                     margin: 0 0.25rem;
                 }
+                .table-responsive {
+                    min-height: 400px;
+                }
+                #repuestosTableBody {
+                    min-height: 350px;
+                }
             `;
             document.head.appendChild(style);
         }
     },
 
-    async cargarRepuestos() {
+    async contarTotalRepuestos() {
         try {
-            const repuestosSnapshot = await firebase.firestore().collection('repuestos').get();
-            const tbody = document.querySelector('#repuestosTable tbody');
-            tbody.innerHTML = '';
+            const snapshot = await firebase.firestore().collection('repuestos').get();
+            this.totalItems = snapshot.size;
+            document.getElementById('totalRepuestos').textContent = this.totalItems.toLocaleString();
+        } catch (error) {
+            console.error('Error contando repuestos:', error);
+        }
+    },
+
+    async cargarRepuestosPaginados(page = 1) {
+        try {
+            const tbody = document.getElementById('repuestosTableBody');
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
             
-            repuestosSnapshot.forEach(doc => {
+            let query = firebase.firestore().collection('repuestos')
+                .orderBy('codigo')
+                .limit(this.itemsPerPage);
+            
+            // Si no es la primera página, usar el último documento visible
+            if (page > 1 && this.lastVisible) {
+                query = query.startAfter(this.lastVisible);
+            }
+            
+            const snapshot = await query.get();
+            
+            // Guardar el último documento para la siguiente página
+            if (!snapshot.empty) {
+                this.lastVisible = snapshot.docs[snapshot.docs.length - 1];
+            }
+            
+            // Renderizar datos
+            tbody.innerHTML = '';
+            snapshot.forEach(doc => {
                 const repuesto = doc.data();
                 tbody.innerHTML += `
                     <tr>
@@ -193,9 +276,163 @@ const repuestosComponent = {
                     </tr>
                 `;
             });
+            
+            if (snapshot.empty) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron repuestos</td></tr>';
+            }
+            
+            this.currentPage = page;
+            this.actualizarPaginacion();
+            
         } catch (error) {
-            console.error('Error al cargar repuestos:', error);
+            console.error('Error al cargar repuestos paginados:', error);
             Swal.fire('Error', 'No se pudieron cargar los repuestos', 'error');
+        }
+    },
+
+    actualizarPaginacion() {
+        const totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
+        const pagination = document.getElementById('pagination');
+        pagination.innerHTML = '';
+        
+        // Botón anterior
+        pagination.innerHTML += `
+            <li class="page-item ${this.currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="repuestosComponent.cambiarPagina(${this.currentPage - 1}); return false;">Anterior</a>
+            </li>
+        `;
+        
+        // Páginas
+        let startPage = Math.max(1, this.currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            pagination.innerHTML += `
+                <li class="page-item ${i === this.currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="repuestosComponent.cambiarPagina(${i}); return false;">${i}</a>
+                </li>
+            `;
+        }
+        
+        // Botón siguiente
+        pagination.innerHTML += `
+            <li class="page-item ${this.currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="repuestosComponent.cambiarPagina(${this.currentPage + 1}); return false;">Siguiente</a>
+            </li>
+        `;
+    },
+
+    cambiarPagina(page) {
+        if (page < 1 || page > Math.ceil(this.totalItems / this.itemsPerPage)) return;
+        this.cargarRepuestosPaginados(page);
+    },
+
+    cambiarItemsPorPagina(value) {
+        this.itemsPerPage = parseInt(value);
+        this.currentPage = 1;
+        this.lastVisible = null;
+        this.cargarRepuestosPaginados();
+    },
+
+    async buscarRepuestos() {
+        const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+        
+        if (searchTerm === '') {
+            // Si no hay término de búsqueda, volver a la vista normal
+            this.currentPage = 1;
+            this.lastVisible = null;
+            this.cargarRepuestosPaginados();
+            return;
+        }
+        
+        try {
+            const tbody = document.getElementById('repuestosTableBody');
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</td></tr>';
+            
+            // Buscar por código exacto primero
+            let query = firebase.firestore().collection('repuestos')
+                .where('codigo', '==', searchTerm.toUpperCase())
+                .limit(50);
+            
+            let snapshot = await query.get();
+            
+            // Si no se encuentra por código, buscar en nombre
+            if (snapshot.empty) {
+                // Firebase no soporta búsquedas de texto completo, así que necesitamos obtener todos los documentos
+                // y filtrar en el cliente. Para optimizar, limitamos la búsqueda.
+                const allSnapshot = await firebase.firestore().collection('repuestos')
+                    .orderBy('nombre')
+                    .get();
+                
+                const results = [];
+                allSnapshot.forEach(doc => {
+                    const repuesto = doc.data();
+                    if (repuesto.nombre.toLowerCase().includes(searchTerm)) {
+                        results.push({ id: doc.id, ...repuesto });
+                    }
+                });
+                
+                // Limitar a los primeros 50 resultados
+                const limitedResults = results.slice(0, 50);
+                
+                tbody.innerHTML = '';
+                limitedResults.forEach(repuesto => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${repuesto.codigo}</td>
+                            <td>${repuesto.nombre}</td>
+                            <td>$${repuesto.precio.toFixed(2)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${repuesto.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-action" onclick="repuestosComponent.eliminarRepuesto('${repuesto.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                if (limitedResults.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron resultados</td></tr>';
+                }
+                
+                // Deshabilitar paginación durante búsqueda
+                document.getElementById('pagination').innerHTML = '';
+            } else {
+                // Mostrar resultados de búsqueda por código
+                tbody.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const repuesto = doc.data();
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${repuesto.codigo}</td>
+                            <td>${repuesto.nombre}</td>
+                            <td>$${repuesto.precio.toFixed(2)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${doc.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-action" onclick="repuestosComponent.eliminarRepuesto('${doc.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                // Deshabilitar paginación durante búsqueda
+                document.getElementById('pagination').innerHTML = '';
+            }
+            
+        } catch (error) {
+            console.error('Error en búsqueda:', error);
+            Swal.fire('Error', 'Error al realizar la búsqueda', 'error');
         }
     },
 
@@ -222,7 +459,12 @@ const repuestosComponent = {
             document.getElementById('addRepuestoForm').reset();
             
             Swal.fire('Éxito', 'Repuesto agregado correctamente', 'success');
-            this.cargarRepuestos();
+            
+            // Actualizar contador y recargar
+            await this.contarTotalRepuestos();
+            this.currentPage = 1;
+            this.lastVisible = null;
+            this.cargarRepuestosPaginados();
         } catch (error) {
             console.error('Error al guardar repuesto:', error);
             Swal.fire('Error', 'No se pudo guardar el repuesto', 'error');
@@ -343,44 +585,55 @@ const repuestosComponent = {
         }
         
         try {
+            const totalRegistros = this.datosTemporales.length;
+            const batchSize = 500; // Procesar en lotes de 500
+            let procesados = 0;
+            
             Swal.fire({
                 title: 'Cargando repuestos...',
-                text: 'Por favor espere',
+                html: `Procesando: <b>0</b> de ${totalRegistros}`,
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
                 }
             });
             
-            const batch = firebase.firestore().batch();
-            let cargadosExitosamente = 0;
-            
-            this.datosTemporales.forEach(repuesto => {
-                // Validar datos antes de agregar al batch
-                if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
-                    const docRef = firebase.firestore().collection('repuestos').doc();
-                    batch.set(docRef, {
-                        codigo: repuesto.codigo,
-                        nombre: repuesto.nombre,
-                        precio: repuesto.precio,
-                        fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    cargadosExitosamente++;
-                }
-            });
-            
-            if (cargadosExitosamente === 0) {
-                Swal.fire('Error', 'No se encontraron datos válidos para cargar', 'error');
-                return;
+            // Procesar en lotes para evitar sobrecargar Firebase
+            for (let i = 0; i < totalRegistros; i += batchSize) {
+                const batch = firebase.firestore().batch();
+                const lote = this.datosTemporales.slice(i, i + batchSize);
+                
+                lote.forEach(repuesto => {
+                    if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
+                        const docRef = firebase.firestore().collection('repuestos').doc();
+                        batch.set(docRef, {
+                            codigo: repuesto.codigo,
+                            nombre: repuesto.nombre,
+                            precio: repuesto.precio,
+                            fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                });
+                
+                await batch.commit();
+                procesados += lote.length;
+                
+                // Actualizar progreso
+                Swal.update({
+                    html: `Procesando: <b>${procesados}</b> de ${totalRegistros}`
+                });
             }
-            
-            await batch.commit();
             
             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
             modal.hide();
             
-            Swal.fire('Éxito', `${cargadosExitosamente} repuestos cargados correctamente`, 'success');
-            this.cargarRepuestos();
+            Swal.fire('Éxito', `${procesados} repuestos cargados correctamente`, 'success');
+            
+            // Actualizar vista
+            await this.contarTotalRepuestos();
+            this.currentPage = 1;
+            this.lastVisible = null;
+            this.cargarRepuestosPaginados();
             
             // Resetear
             this.datosTemporales = [];
@@ -410,7 +663,10 @@ const repuestosComponent = {
             try {
                 await firebase.firestore().collection('repuestos').doc(id).delete();
                 Swal.fire('Eliminado', 'El repuesto ha sido eliminado', 'success');
-                this.cargarRepuestos();
+                
+                // Actualizar vista
+                await this.contarTotalRepuestos();
+                this.cargarRepuestosPaginados(this.currentPage);
             } catch (error) {
                 console.error('Error al eliminar:', error);
                 Swal.fire('Error', 'No se pudo eliminar el repuesto', 'error');
@@ -419,6 +675,18 @@ const repuestosComponent = {
     },
 
     inicializarEventos() {
+        // Búsqueda con debounce
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    this.buscarRepuestos();
+                }, 500); // Esperar 500ms después de que el usuario deje de escribir
+            });
+        }
+        
+        // Drag and drop
         const uploadArea = document.querySelector('.file-upload-area');
         if (uploadArea) {
             uploadArea.addEventListener('dragover', (e) => {
