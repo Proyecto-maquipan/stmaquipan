@@ -1,54 +1,44 @@
 // Storage.js - Sistema de almacenamiento con Firebase
 
-// Usar la instancia de Firebase ya inicializada
-// Modificamos para evitar redeclaraciones
+// Variables globales para Firebase (usando window para evitar redeclaraciones)
 window.db = window.db || null;
 window.firebaseInitialized = window.firebaseInitialized || false;
 
-// Intentamos obtener la instancia de Firestore
-function initStorage() {
-    try {
-        if (!window.db) {
-            window.db = firebase.firestore();
-            window.firebaseInitialized = true;
-            console.log('Storage con Firebase inicializado correctamente');
-            
-            // Ahora que Firebase está inicializado, podemos inicializar el storage
-            storage.init();
-        }
-    } catch (error) {
-        console.error('Error accediendo a Firebase en storage.js:', error);
-        // Intentar nuevamente en 1 segundo
-        setTimeout(initStorage, 1000);
-    }
-}
-
 // Sistema de almacenamiento con Firebase
 const storage = {
-    // Inicializar datos si es necesario
+    // Inicializar Firebase y configurar listeners
     async init() {
-        if (!window.firebaseInitialized) {
-            console.error('Firebase no está inicializado correctamente');
-            return;
-        }
-        
         try {
-            // Verificar si existen usuarios administradores
-            const usuariosSnapshot = await window.db.collection('usuarios').where('rol', '==', 'admin').get();
-            
-            // Si no hay usuarios, crear uno por defecto
-            if (usuariosSnapshot.empty) {
-                await window.db.collection('usuarios').add({
-                    username: 'admin',
-                    password: 'admin123',
-                    nombre: 'Cristian Andrés Pimentel Mancilla',
-                    rol: 'admin',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                console.log('Usuario administrador por defecto creado');
+            if (!window.db && typeof firebase !== 'undefined') {
+                window.db = firebase.firestore();
+                window.firebaseInitialized = true;
+                console.log('Storage con Firebase inicializado correctamente');
+                
+                // Verificar si existen usuarios administradores
+                const usuariosSnapshot = await window.db.collection('usuarios').where('rol', '==', 'admin').get();
+                
+                // Si no hay usuarios, crear uno por defecto
+                if (usuariosSnapshot.empty) {
+                    await window.db.collection('usuarios').add({
+                        username: 'admin',
+                        password: 'admin123',
+                        nombre: 'Cristian Andrés Pimentel Mancilla',
+                        rol: 'admin',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log('Usuario administrador por defecto creado');
+                }
+                
+                // Notificar que storage está listo
+                if (typeof window.onStorageReady === 'function') {
+                    window.onStorageReady();
+                }
             }
         } catch (error) {
             console.error('Error al inicializar storage:', error);
+            
+            // Intentar nuevamente en 1 segundo
+            setTimeout(() => this.init(), 1000);
         }
     },
 
@@ -111,9 +101,31 @@ const storage = {
         }
     },
 
+    // Verificar si Firebase está inicializado
+    isInitialized() {
+        return window.firebaseInitialized;
+    },
+
+    // Esperar a que Firebase esté inicializado
+    waitForInitialization() {
+        return new Promise((resolve) => {
+            if (window.firebaseInitialized) {
+                resolve();
+            } else {
+                // Definir una función que se llamará cuando storage esté listo
+                window.onStorageReady = function() {
+                    resolve();
+                };
+            }
+        });
+    },
+
     // Requerimientos
     async getRequerimientos() {
-        if (!window.firebaseInitialized) return [];
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             const snapshot = await window.db.collection('requerimientos').get();
@@ -129,7 +141,10 @@ const storage = {
     },
 
     async saveRequerimiento(requerimiento) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             // Generar número secuencial
@@ -160,7 +175,10 @@ const storage = {
     },
 
     async updateRequerimiento(id, requerimiento) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             requerimiento.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -174,7 +192,10 @@ const storage = {
 
     // Cotizaciones
     async getCotizaciones() {
-        if (!window.firebaseInitialized) return [];
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             const snapshot = await window.db.collection('cotizaciones').get();
@@ -190,7 +211,10 @@ const storage = {
     },
 
     async saveCotizacion(cotizacion) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             // Generar número secuencial
@@ -221,7 +245,10 @@ const storage = {
     },
 
     async updateCotizacion(id, cotizacion) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             cotizacion.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -235,7 +262,10 @@ const storage = {
 
     // Clientes
     async getClientes() {
-        if (!window.firebaseInitialized) return [];
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             const snapshot = await window.db.collection('clientes').get();
@@ -251,7 +281,10 @@ const storage = {
     },
 
     async saveCliente(cliente) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             // Generar código secuencial
@@ -282,7 +315,10 @@ const storage = {
     },
 
     async updateCliente(id, cliente) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             cliente.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -295,7 +331,10 @@ const storage = {
     },
 
     async deleteCliente(id) {
-        if (!window.firebaseInitialized) return Promise.reject(new Error('Firebase no inicializado'));
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             await window.db.collection('clientes').doc(id).delete();
@@ -308,7 +347,10 @@ const storage = {
 
     // Búsqueda
     async search(type, query) {
-        if (!window.firebaseInitialized) return [];
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             query = query.toLowerCase();
@@ -351,12 +393,10 @@ const storage = {
 
     // Estadísticas para el dashboard
     async getDashboardStats() {
-        if (!window.firebaseInitialized) return {
-            requerimientosPendientes: 0,
-            cotizacionesActivas: 0,
-            serviciosCompletados: 0,
-            clientesActivos: 0
-        };
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             const requerimientosSnapshot = await window.db.collection('requerimientos').get();
@@ -388,7 +428,10 @@ const storage = {
 
     // Usuarios
     async getUsuarios() {
-        if (!window.firebaseInitialized) return [];
+        // Esperar a que Firebase esté inicializado
+        if (!window.firebaseInitialized) {
+            await this.waitForInitialization();
+        }
         
         try {
             const snapshot = await window.db.collection('usuarios').get();
@@ -407,5 +450,5 @@ const storage = {
 // Hacer storage disponible globalmente
 window.storage = storage;
 
-// Inicializar storage cuando Firebase esté disponible
-setTimeout(initStorage, 500);
+// Inicializar storage
+storage.init();
