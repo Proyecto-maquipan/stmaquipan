@@ -1,21 +1,23 @@
 // Archivo principal de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificar que todos los objetos necesarios estén disponibles
-    if (typeof storage === 'undefined') {
-        console.error('Storage no está definido');
+    // Esperar a que los componentes principales estén disponibles
+    checkDependencies();
+});
+
+// Función para verificar que las dependencias estén cargadas
+function checkDependencies() {
+    if (typeof storage === 'undefined' || typeof auth === 'undefined' || typeof router === 'undefined') {
+        console.log('Esperando a que se carguen todas las dependencias...');
+        setTimeout(checkDependencies, 500);
         return;
     }
     
-    if (typeof auth === 'undefined') {
-        console.error('Auth no está definido');
-        return;
-    }
-    
-    if (typeof router === 'undefined') {
-        console.error('Router no está definido');
-        return;
-    }
-    
+    console.log('Todas las dependencias están cargadas, iniciando aplicación');
+    initApp();
+}
+
+// Inicializar la aplicación cuando todas las dependencias estén disponibles
+function initApp() {
     // Registrar rutas
     router.register('dashboard', dashboardComponent);
     router.register('requerimientos', requerimientosComponent);
@@ -37,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Actualizar info de usuario
     auth.updateUserInfo();
-});
+}
 
 // Componente Login (para completar el sistema)
 const loginComponent = {
@@ -95,36 +97,45 @@ const loginComponent = {
 };
 
 // Función para generar PDF de requerimiento (ejemplo básico)
-// Agregar async a la función para poder usar await
+// CORREGIDO: Añadida la palabra clave async
 async function generarPDF(reqId) {
-    const requerimientos = await storage.getRequerimientos();
-    const requerimiento = requerimientos.find(r => r.id === reqId);
-    if (requerimiento) {
-        // En una implementación real, aquí usaríamos una librería como jsPDF
-        alert(`Generando PDF para requerimiento ${reqId}...\n` +
-              `Este es un ejemplo. En producción, se generaría un PDF real.`);
+    try {
+        const requerimientos = await storage.getRequerimientos();
+        const requerimiento = requerimientos.find(r => r.id === reqId);
+        if (requerimiento) {
+            // En una implementación real, aquí usaríamos una librería como jsPDF
+            alert(`Generando PDF para requerimiento ${reqId}...\n` +
+                `Este es un ejemplo. En producción, se generaría un PDF real.`);
+        } else {
+            alert(`No se encontró el requerimiento con ID: ${reqId}`);
+        }
+    } catch (error) {
+        console.error('Error al generar PDF de requerimiento:', error);
+        alert('Error al generar el PDF. Consulte la consola para más detalles.');
     }
 }
 
 // Función para generar PDF de cotización (ejemplo básico)
-// Agregar async a la función para poder usar await
+// CORREGIDO: Añadida la palabra clave async
 async function generarPDFCotizacion(numero) {
-    const cotizaciones = await storage.getCotizaciones();
-    const cotizacion = cotizaciones.find(c => c.numero === numero);
-    if (cotizacion) {
-        // En una implementación real, aquí usaríamos una librería como jsPDF
-        alert(`Generando PDF para cotización ${numero}...\n` +
-              `Este es un ejemplo. En producción, se generaría un PDF real.`);
+    try {
+        const cotizaciones = await storage.getCotizaciones();
+        const cotizacion = cotizaciones.find(c => c.numero === numero);
+        if (cotizacion) {
+            // En una implementación real, aquí usaríamos una librería como jsPDF
+            alert(`Generando PDF para cotización ${numero}...\n` +
+                `Este es un ejemplo. En producción, se generaría un PDF real.`);
+        } else {
+            alert(`No se encontró la cotización con número: ${numero}`);
+        }
+    } catch (error) {
+        console.error('Error al generar PDF de cotización:', error);
+        alert('Error al generar el PDF. Consulte la consola para más detalles.');
     }
 }
 
 // Cargar algunos datos de ejemplo si no existen
 async function cargarDatosEjemplo() {
-    if (typeof storage === 'undefined') {
-        console.error('Storage no está disponible para cargar datos de ejemplo');
-        return;
-    }
-    
     try {
         // En lugar de usar getAll (que ahora hemos hecho compatible)
         // Preferimos usar los métodos directos
@@ -132,25 +143,35 @@ async function cargarDatosEjemplo() {
         
         // Si no hay clientes, agregar algunos de ejemplo
         if (clientes && clientes.length === 0) {
-            await storage.saveCliente({
-                rut: '81201000-K',
-                razonSocial: 'CENCOSUD RETAIL S.A.',
-                direccion: 'AV. KENNEDY N°9001, 5 PISO',
-                ciudad: 'SANTIAGO',
-                contacto: 'LUIS VALENZUELA',
-                telefono: '229590555',
-                email: 'luis.valenzuela@cencosud.cl'
-            });
+            console.log('No se encontraron clientes, agregando ejemplos...');
             
-            await storage.saveCliente({
-                rut: '86627700-5',
-                razonSocial: 'HIPERMERCADO TOTTUS S.A.',
-                direccion: 'MALL PLAZA OESTE',
-                ciudad: 'SANTIAGO',
-                contacto: 'MARIA GONZALEZ',
-                telefono: '226547890',
-                email: 'maria.gonzalez@tottus.cl'
-            });
+            try {
+                await storage.saveCliente({
+                    rut: '81201000-K',
+                    razonSocial: 'CENCOSUD RETAIL S.A.',
+                    direccion: 'AV. KENNEDY N°9001, 5 PISO',
+                    ciudad: 'SANTIAGO',
+                    contacto: 'LUIS VALENZUELA',
+                    telefono: '229590555',
+                    email: 'luis.valenzuela@cencosud.cl'
+                });
+                
+                await storage.saveCliente({
+                    rut: '86627700-5',
+                    razonSocial: 'HIPERMERCADO TOTTUS S.A.',
+                    direccion: 'MALL PLAZA OESTE',
+                    ciudad: 'SANTIAGO',
+                    contacto: 'MARIA GONZALEZ',
+                    telefono: '226547890',
+                    email: 'maria.gonzalez@tottus.cl'
+                });
+                
+                console.log('Datos de ejemplo cargados correctamente');
+            } catch (saveError) {
+                console.error('Error al guardar clientes de ejemplo:', saveError);
+            }
+        } else {
+            console.log('Ya existen clientes en la base de datos');
         }
     } catch (error) {
         console.error('Error cargando datos de ejemplo:', error);
