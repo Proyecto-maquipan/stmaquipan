@@ -1186,4 +1186,3 @@ const localesComponent = {
     }
 };
 
-export default localesComponent;
