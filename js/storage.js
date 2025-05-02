@@ -1,13 +1,14 @@
 // Storage.js - Sistema de almacenamiento con Firebase
 
 // Usar la instancia de Firebase ya inicializada
-let db;
+// Modificación: Usamos otro nombre para evitar conflictos
+let storageDb;
 let firebaseInitialized = false;
 
 // Intentamos obtener la instancia de Firestore
 function initStorage() {
     try {
-        db = firebase.firestore();
+        storageDb = firebase.firestore();
         firebaseInitialized = true;
         console.log('Storage con Firebase inicializado correctamente');
         
@@ -30,11 +31,11 @@ const storage = {
         }
         
         // Verificar si existen usuarios administradores
-        const usuariosSnapshot = await db.collection('usuarios').where('rol', '==', 'admin').get();
+        const usuariosSnapshot = await storageDb.collection('usuarios').where('rol', '==', 'admin').get();
         
         // Si no hay usuarios, crear uno por defecto
         if (usuariosSnapshot.empty) {
-            await db.collection('usuarios').add({
+            await storageDb.collection('usuarios').add({
                 username: 'admin',
                 password: 'admin123',
                 nombre: 'Cristian Andrés Pimentel Mancilla',
@@ -109,7 +110,7 @@ const storage = {
         if (!firebaseInitialized) return [];
         
         try {
-            const snapshot = await db.collection('requerimientos').get();
+            const snapshot = await storageDb.collection('requerimientos').get();
             const requerimientos = [];
             snapshot.forEach(doc => {
                 requerimientos.push({ ...doc.data(), id: doc.id });
@@ -126,7 +127,7 @@ const storage = {
         
         try {
             // Generar número secuencial
-            const counterRef = db.collection('counters').doc('requerimiento');
+            const counterRef = storageDb.collection('counters').doc('requerimiento');
             const counterDoc = await counterRef.get();
             
             let nextNumber = 1000;
@@ -140,7 +141,7 @@ const storage = {
             requerimiento.numero = `REQ-${nextNumber}`;
             requerimiento.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
-            const docRef = await db.collection('requerimientos').add(requerimiento);
+            const docRef = await storageDb.collection('requerimientos').add(requerimiento);
             
             // Actualizar con el ID
             await docRef.update({ id: docRef.id });
@@ -157,7 +158,7 @@ const storage = {
         
         try {
             requerimiento.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-            await db.collection('requerimientos').doc(id).update(requerimiento);
+            await storageDb.collection('requerimientos').doc(id).update(requerimiento);
             return true;
         } catch (error) {
             console.error('Error actualizando requerimiento:', error);
@@ -170,7 +171,7 @@ const storage = {
         if (!firebaseInitialized) return [];
         
         try {
-            const snapshot = await db.collection('cotizaciones').get();
+            const snapshot = await storageDb.collection('cotizaciones').get();
             const cotizaciones = [];
             snapshot.forEach(doc => {
                 cotizaciones.push({ ...doc.data(), id: doc.id });
@@ -187,7 +188,7 @@ const storage = {
         
         try {
             // Generar número secuencial
-            const counterRef = db.collection('counters').doc('cotizacion');
+            const counterRef = storageDb.collection('counters').doc('cotizacion');
             const counterDoc = await counterRef.get();
             
             let nextNumber = 1000;
@@ -201,7 +202,7 @@ const storage = {
             cotizacion.numero = `COT-${nextNumber}`;
             cotizacion.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
-            const docRef = await db.collection('cotizaciones').add(cotizacion);
+            const docRef = await storageDb.collection('cotizaciones').add(cotizacion);
             
             // Actualizar con el ID
             await docRef.update({ id: docRef.id });
@@ -218,7 +219,7 @@ const storage = {
         
         try {
             cotizacion.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-            await db.collection('cotizaciones').doc(id).update(cotizacion);
+            await storageDb.collection('cotizaciones').doc(id).update(cotizacion);
             return true;
         } catch (error) {
             console.error('Error actualizando cotización:', error);
@@ -231,7 +232,7 @@ const storage = {
         if (!firebaseInitialized) return [];
         
         try {
-            const snapshot = await db.collection('clientes').get();
+            const snapshot = await storageDb.collection('clientes').get();
             const clientes = [];
             snapshot.forEach(doc => {
                 clientes.push({ ...doc.data(), id: doc.id });
@@ -248,7 +249,7 @@ const storage = {
         
         try {
             // Generar código secuencial
-            const counterRef = db.collection('counters').doc('cliente');
+            const counterRef = storageDb.collection('counters').doc('cliente');
             const counterDoc = await counterRef.get();
             
             let nextNumber = 1000;
@@ -262,7 +263,7 @@ const storage = {
             cliente.codigo = `CLI-${nextNumber}`;
             cliente.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
-            const docRef = await db.collection('clientes').add(cliente);
+            const docRef = await storageDb.collection('clientes').add(cliente);
             
             // Actualizar con el ID
             await docRef.update({ id: docRef.id });
@@ -279,7 +280,7 @@ const storage = {
         
         try {
             cliente.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-            await db.collection('clientes').doc(id).update(cliente);
+            await storageDb.collection('clientes').doc(id).update(cliente);
             return true;
         } catch (error) {
             console.error('Error actualizando cliente:', error);
@@ -291,7 +292,7 @@ const storage = {
         if (!firebaseInitialized) return false;
         
         try {
-            await db.collection('clientes').doc(id).delete();
+            await storageDb.collection('clientes').doc(id).delete();
             return true;
         } catch (error) {
             console.error('Error eliminando cliente:', error);
@@ -347,9 +348,9 @@ const storage = {
         if (!firebaseInitialized) return {};
         
         try {
-            const requerimientosSnapshot = await db.collection('requerimientos').get();
-            const cotizacionesSnapshot = await db.collection('cotizaciones').get();
-            const clientesSnapshot = await db.collection('clientes').get();
+            const requerimientosSnapshot = await storageDb.collection('requerimientos').get();
+            const cotizacionesSnapshot = await storageDb.collection('cotizaciones').get();
+            const clientesSnapshot = await storageDb.collection('clientes').get();
             
             const requerimientos = [];
             requerimientosSnapshot.forEach(doc => requerimientos.push(doc.data()));
@@ -379,7 +380,7 @@ const storage = {
         if (!firebaseInitialized) return [];
         
         try {
-            const snapshot = await db.collection('usuarios').get();
+            const snapshot = await storageDb.collection('usuarios').get();
             const usuarios = [];
             snapshot.forEach(doc => {
                 usuarios.push({ ...doc.data(), id: doc.id });
