@@ -24,14 +24,15 @@ const COLLECTIONS = {
     CLIENTES: 'clientes',
     USERS: 'users',
     COUNTERS: 'counters',
-    REPUESTOS: 'repuestos'
+    REPUESTOS: 'repuestos',
+    LOCALES: 'locales' // Nueva colección para locales
 };
 
 // Servicio de sincronización con Firebase
 const FirebaseService = {
     // Inicializar contadores
     async initCounters() {
-        const counters = ['requerimiento', 'cliente', 'cotizacion'];
+        const counters = ['requerimiento', 'cliente', 'cotizacion', 'local']; // Agregamos contador para locales
         
         for (const counter of counters) {
             const doc = await db.collection(COLLECTIONS.COUNTERS).doc(counter).get();
@@ -193,6 +194,17 @@ const FirebaseService = {
         }
     },
 
+    async getClienteById(id) {
+        try {
+            const doc = await db.collection(COLLECTIONS.CLIENTES).doc(id).get();
+            if (!doc.exists) return null;
+            return { id: doc.id, ...doc.data() };
+        } catch (error) {
+            console.error('Error getting cliente by id:', error);
+            throw error;
+        }
+    },
+
     async updateCliente(id, data) {
         try {
             await db.collection(COLLECTIONS.CLIENTES).doc(id).update(data);
@@ -208,6 +220,78 @@ const FirebaseService = {
             await db.collection(COLLECTIONS.CLIENTES).doc(id).delete();
         } catch (error) {
             console.error('Error deleting cliente:', error);
+            throw error;
+        }
+    },
+
+    // CRUD para Locales
+    async saveLocal(local) {
+        try {
+            if (!local.codigo) {
+                const nextNumber = await this.getNextCounter('local');
+                local.codigo = `LOC-${nextNumber}`;
+            }
+            
+            const docRef = await db.collection(COLLECTIONS.LOCALES).add(local);
+            local.id = docRef.id;
+            
+            await docRef.update({ id: docRef.id });
+            
+            return local;
+        } catch (error) {
+            console.error('Error saving local:', error);
+            throw error;
+        }
+    },
+
+    async getLocales() {
+        try {
+            const snapshot = await db.collection(COLLECTIONS.LOCALES).get();
+            return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        } catch (error) {
+            console.error('Error getting locales:', error);
+            throw error;
+        }
+    },
+
+    async getLocalesByCliente(clienteId) {
+        try {
+            const snapshot = await db.collection(COLLECTIONS.LOCALES)
+                .where('clienteId', '==', clienteId)
+                .get();
+            return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        } catch (error) {
+            console.error('Error getting locales by cliente:', error);
+            throw error;
+        }
+    },
+
+    async getLocalById(id) {
+        try {
+            const doc = await db.collection(COLLECTIONS.LOCALES).doc(id).get();
+            if (!doc.exists) return null;
+            return { id: doc.id, ...doc.data() };
+        } catch (error) {
+            console.error('Error getting local by id:', error);
+            throw error;
+        }
+    },
+
+    async updateLocal(id, data) {
+        try {
+            await db.collection(COLLECTIONS.LOCALES).doc(id).update(data);
+            return { ...data, id };
+        } catch (error) {
+            console.error('Error updating local:', error);
+            throw error;
+        }
+    },
+
+    async deleteLocal(id) {
+        try {
+            await db.collection(COLLECTIONS.LOCALES).doc(id).delete();
+        } catch (error) {
+            console.error('Error deleting local:', error);
             throw error;
         }
     },
