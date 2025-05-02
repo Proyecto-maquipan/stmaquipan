@@ -24,13 +24,11 @@
             </nav>
         </div>
     </header>
-
     <div class="user-section">
         <div class="user-info" id="userInfo">
             <!-- Nombre de usuario se carga dinámicamente -->
         </div>
     </div>
-
     <main class="main-container">
         <aside class="sidebar">
             <ul class="sidebar-menu">
@@ -41,15 +39,16 @@
                 <li><a onclick="router.navigate('configuracion')" class="sidebar-link">CONFIGURACIÓN</a></li>
             </ul>
         </aside>
-
         <div class="main-content" id="app">
             <!-- El contenido se carga dinámicamente aquí -->
         </div>
     </main>
-
     <!-- Scripts -->
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <!-- Firebase Scripts - IMPORTANTE: Cambiar a firebase-firestore en lugar de firebase-database -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Tus scripts en el orden correcto -->
     <script src="js/config.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/auth.js"></script>
