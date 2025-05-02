@@ -9,6 +9,7 @@ const router = {
     
     // Navegar a una ruta
     navigate(path) {
+        // Si no está autenticado y no es la página de login, redirigir a login
         if (!auth.isAuthenticated() && path !== 'login') {
             this.navigate('login');
             return;
@@ -37,8 +38,8 @@ const router = {
             
             // Actualizar URL (sin recargar la página)
             history.pushState({ path }, '', `#${path}`);
-        } else {
-            // Ruta no encontrada, ir al dashboard
+        } else if (path !== 'dashboard') {
+            // Si la ruta no existe y no es dashboard, ir al dashboard
             this.navigate('dashboard');
         }
     },
