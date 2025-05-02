@@ -1,109 +1,158 @@
-```javascript
-// Archivo principal de la aplicación simplificado
+// Archivo principal de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM cargado, esperando componentes...');
-    
-    // Esperar a que los componentes estén disponibles
-    setTimeout(checkComponentesDisponibles, 1000);
-});
-
-// Verificar que los componentes estén disponibles
-function checkComponentesDisponibles() {
-    if (typeof window.router === 'undefined' || 
-        typeof window.storage === 'undefined' || 
-        typeof window.auth === 'undefined') {
-        console.log('Esperando a que los componentes estén disponibles...');
-        setTimeout(checkComponentesDisponibles, 1000);
+    // Verificar que todos los objetos necesarios estén disponibles
+    if (typeof storage === 'undefined') {
+        console.error('Storage no está definido');
         return;
     }
     
-    console.log('Componentes disponibles, inicializando app...');
-    inicializarApp();
-}
+    if (typeof auth === 'undefined') {
+        console.error('Auth no está definido');
+        return;
+    }
+    
+    if (typeof router === 'undefined') {
+        console.error('Router no está definido');
+        return;
+    }
+    
+    // Registrar rutas
+    router.register('dashboard', dashboardComponent);
+    router.register('requerimientos', requerimientosComponent);
+    router.register('nuevo-requerimiento', nuevoRequerimientoComponent);
+    router.register('cotizaciones', cotizacionesComponent);
+    router.register('nueva-cotizacion', nuevaCotizacionComponent);
+    router.register('clientes', clientesComponent);
+    router.register('nuevo-cliente', nuevoClienteComponent);
+    router.register('busqueda', busquedaComponent);
+    router.register('login', loginComponent);
+    // IMPORTANTE: Registrar la ruta de repuestos
+    router.register('repuestos', repuestosComponent);
+    
+    // Cargar datos de ejemplo
+    cargarDatosEjemplo();
+    
+    // Inicializar router
+    router.init();
+    
+    // Actualizar info de usuario
+    auth.updateUserInfo();
+});
 
-// Inicializar la aplicación
-function inicializarApp() {
-    try {
-        // Registrar rutas
-        if (typeof dashboardComponent !== 'undefined')
-            router.register('dashboard', dashboardComponent);
+// Componente Login (para completar el sistema)
+const loginComponent = {
+    render(container) {
+        // Ocultar el layout principal si no está autenticado
+        document.querySelector('.user-section').style.display = 'none';
+        document.querySelector('.sidebar').style.display = 'none';
+        
+        container.innerHTML = `
+            <div style="max-width: 400px; margin: 50px auto; padding: 20px;">
+                <h2>Iniciar Sesión</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>Usuario:</label>
+                        <input type="text" id="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Contraseña:</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Ingresar</button>
+                </form>
+                <p style="margin-top: 20px; color: #666;">
+                    Usuario de prueba: admin / admin123
+                </p>
+            </div>
+        `;
+        
+        // Agregar event listener al formulario
+        setTimeout(() => {
+            const form = document.getElementById('loginForm');
+            if (form) {
+                form.addEventListener('submit', this.handleSubmit);
+            }
+        }, 0);
+    },
+    
+    handleSubmit(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        if (auth.login(username, password)) {
+            // Mostrar el layout principal
+            document.querySelector('.user-section').style.display = 'block';
+            document.querySelector('.sidebar').style.display = 'block';
             
-        if (typeof loginComponent !== 'undefined')
-            router.register('login', loginComponent);
-            
-        if (typeof requerimientosComponent !== 'undefined')
-            router.register('requerimientos', requerimientosComponent);
-            
-        if (typeof nuevoRequerimientoComponent !== 'undefined')
-            router.register('nuevo-requerimiento', nuevoRequerimientoComponent);
-        
-        // Registrar otras rutas según sea necesario
-        
-        // Inicializar router
-        router.init();
-        
-        // Cargar datos de ejemplo más tarde
-        setTimeout(cargarDatosEjemplo, 3000);
-        
-        console.log('Aplicación inicializada correctamente');
-    } catch (error) {
-        console.error('Error inicializando la aplicación:', error);
+            auth.updateUserInfo();
+            router.navigate('dashboard');
+        } else {
+            alert('Usuario o contraseña incorrectos');
+        }
+    }
+};
+
+// Función para generar PDF de requerimiento (ejemplo básico)
+// Modificada para ser async
+async function generarPDF(reqId) {
+    const requerimientos = await storage.getRequerimientos();
+    const requerimiento = requerimientos.find(r => r.id === reqId);
+    if (requerimiento) {
+        // En una implementación real, aquí usaríamos una librería como jsPDF
+        alert(`Generando PDF para requerimiento ${reqId}...\n` +
+              `Este es un ejemplo. En producción, se generaría un PDF real.`);
     }
 }
 
-// Función para cargar datos de ejemplo
+// Función para generar PDF de cotización (ejemplo básico)
+// Modificada para ser async
+async function generarPDFCotizacion(numero) {
+    const cotizaciones = await storage.getCotizaciones();
+    const cotizacion = cotizaciones.find(c => c.numero === numero);
+    if (cotizacion) {
+        // En una implementación real, aquí usaríamos una librería como jsPDF
+        alert(`Generando PDF para cotización ${numero}...\n` +
+              `Este es un ejemplo. En producción, se generaría un PDF real.`);
+    }
+}
+
+// Cargar algunos datos de ejemplo si no existen
 async function cargarDatosEjemplo() {
+    if (typeof storage === 'undefined') {
+        console.error('Storage no está disponible para cargar datos de ejemplo');
+        return;
+    }
+    
     try {
-        console.log('Verificando si se deben cargar datos de ejemplo...');
-        
-        if (!window.storage.isInitialized()) {
-            console.log('Firebase aún no está inicializado, posponiendo carga de datos...');
-            setTimeout(cargarDatosEjemplo, 2000);
-            return;
-        }
-        
+        // En lugar de usar getAll (que ahora hemos hecho compatible)
+        // Preferimos usar los métodos directos
         const clientes = await storage.getClientes();
         
+        // Si no hay clientes, agregar algunos de ejemplo
         if (clientes && clientes.length === 0) {
-            console.log('No hay clientes, agregando datos de ejemplo...');
+            await storage.saveCliente({
+                rut: '81201000-K',
+                razonSocial: 'CENCOSUD RETAIL S.A.',
+                direccion: 'AV. KENNEDY N°9001, 5 PISO',
+                ciudad: 'SANTIAGO',
+                contacto: 'LUIS VALENZUELA',
+                telefono: '229590555',
+                email: 'luis.valenzuela@cencosud.cl'
+            });
             
-            try {
-                await storage.saveCliente({
-                    rut: '81201000-K',
-                    razonSocial: 'CENCOSUD RETAIL S.A.',
-                    direccion: 'AV. KENNEDY N°9001, 5 PISO',
-                    ciudad: 'SANTIAGO',
-                    contacto: 'LUIS VALENZUELA',
-                    telefono: '229590555',
-                    email: 'luis.valenzuela@cencosud.cl'
-                });
-                
-                console.log('Cliente de ejemplo agregado correctamente');
-            } catch (saveError) {
-                console.error('Error guardando cliente de ejemplo:', saveError);
-            }
-        } else {
-            console.log(`Ya existen ${clientes.length} clientes en la base de datos`);
+            await storage.saveCliente({
+                rut: '86627700-5',
+                razonSocial: 'HIPERMERCADO TOTTUS S.A.',
+                direccion: 'MALL PLAZA OESTE',
+                ciudad: 'SANTIAGO',
+                contacto: 'MARIA GONZALEZ',
+                telefono: '226547890',
+                email: 'maria.gonzalez@tottus.cl'
+            });
         }
     } catch (error) {
-        console.error('Error verificando datos de ejemplo:', error);
+        console.error('Error cargando datos de ejemplo:', error);
     }
 }
-
-// Función para generar PDF
-async function generarPDF(reqId) {
-    try {
-        const requerimientos = await storage.getRequerimientos();
-        const requerimiento = requerimientos.find(r => r.id === reqId);
-        
-        if (requerimiento) {
-            alert(`Generando PDF para requerimiento ${reqId}...`);
-        } else {
-            alert(`No se encontró el requerimiento con ID ${reqId}`);
-        }
-    } catch (error) {
-        console.error('Error generando PDF:', error);
-        alert('Error generando PDF');
-    }
-}
-```
