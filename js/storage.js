@@ -92,13 +92,10 @@ const storage = {
     },
 
     // Requerimientos
-    getRequerimientos() {
-        if (firebaseInitialized) {
-            return this.getRequerimientosFromFirebase();
-        }
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        return data ? data.requerimientos : [];
-    },
+getRequerimientos() {
+    const data = JSON.parse(localStorage.getItem('maquipan_data'));
+    return data ? data.requerimientos : [];
+},
 
     async getRequerimientosFromFirebase() {
         try {
@@ -164,13 +161,10 @@ const storage = {
     },
 
     // Cotizaciones
-    getCotizaciones() {
-        if (firebaseInitialized) {
-            return this.getCotizacionesFromFirebase();
-        }
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        return data ? data.cotizaciones : [];
-    },
+getCotizaciones() {
+    const data = JSON.parse(localStorage.getItem('maquipan_data'));
+    return data ? data.cotizaciones : [];
+},
 
     async getCotizacionesFromFirebase() {
         try {
@@ -207,13 +201,10 @@ const storage = {
     },
 
     // Clientes
-    getClientes() {
-        if (firebaseInitialized) {
-            return this.getClientesFromFirebase();
-        }
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        return data ? data.clientes : [];
-    },
+getClientes() {
+    const data = JSON.parse(localStorage.getItem('maquipan_data'));
+    return data ? data.clientes : [];
+},
 
     async getClientesFromFirebase() {
         try {
