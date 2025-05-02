@@ -15,7 +15,7 @@ const cotizacionPDF = {
         doc.text("COTIZACIÓN :", 140, y);
         doc.text(cotizacion.numero, 175, y);
         
-        // Logo o nombre de la empresa (puedes agregar una imagen si tienes)
+        // Logo o nombre de la empresa
         doc.setFontSize(20);
         doc.setTextColor(200, 0, 0); // Rojo
         doc.text("MAQUIPAN", margin, y + 15);
@@ -50,7 +50,7 @@ const cotizacionPDF = {
         doc.text("R.U.T.:", 140, y);
         doc.setFont("helvetica", "normal");
         doc.text(cotizacion.cliente, margin + 35, y);
-        doc.text(cotizacion.rut, 155, y);
+        doc.text(cotizacion.rut || "", 155, y);
         
         y += 7;
         doc.setFont("helvetica", "bold");
@@ -119,19 +119,19 @@ const cotizacionPDF = {
         y += 10;
         doc.setFont("helvetica", "bold");
         doc.text("Sub Total", 150, y);
-        doc.text(cotizacion.subtotal?.toLocaleString('es-CL') || "0", 175, y);
+        doc.text(cotizacion.subtotal.toLocaleString('es-CL'), 175, y);
         
         y += 7;
         doc.text("Descuento", 150, y);
-        doc.text(cotizacion.descuento?.toLocaleString('es-CL') || "0", 175, y);
+        doc.text((cotizacion.descuento || 0).toLocaleString('es-CL'), 175, y);
         
         y += 7;
         doc.text("Iva", 150, y);
-        doc.text(cotizacion.iva?.toLocaleString('es-CL') || "0", 175, y);
+        doc.text(cotizacion.iva.toLocaleString('es-CL'), 175, y);
         
         y += 7;
         doc.text("Total", 150, y);
-        doc.text(cotizacion.total?.toLocaleString('es-CL') || "0", 175, y);
+        doc.text(cotizacion.total.toLocaleString('es-CL'), 175, y);
         
         // Observaciones
         y += 15;
@@ -171,8 +171,3 @@ const cotizacionPDF = {
         doc.save(`cotizacion_${cotizacion.numero}.pdf`);
     }
 };
-
-// En tu componente de cotizaciones, agrega un botón para descargar PDF:
-// <button class="btn btn-success" onclick="cotizacionPDF.generarPDF(cotizacion)">
-//     <i class="fas fa-file-pdf"></i> Descargar PDF
-// </button>
