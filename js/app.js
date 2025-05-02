@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('login', loginComponent);
     // IMPORTANTE: Registrar la ruta de repuestos
     router.register('repuestos', repuestosComponent);
+    // IMPORTANTE: Registrar la ruta de locales
+    router.register('locales', localesComponent);
     
     // Cargar datos de ejemplo
     cargarDatosEjemplo();
@@ -150,6 +152,3 @@ function cargarDatosEjemplo() {
         console.error('Error cargando datos de ejemplo:', error);
     }
 }
-
-// NO cargar datos de ejemplo aquí, se hace dentro de DOMContentLoaded
-// cargarDatosEjemplo(); // ELIMINAR ESTA LÍNEA
