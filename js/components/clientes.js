@@ -1,8 +1,9 @@
 // Componente de Gestión de Clientes
 const clientesComponent = {
-    async render(container) {
-        try {
-            container.innerHTML = `
+async render(container) {
+    try {
+        const appContainer = container || document.getElementById('app');
+        appContainer.innerHTML = `
                 <div class="container-fluid">
                     <div class="row mb-4">
                         <div class="col-12">
@@ -173,9 +174,10 @@ const clientesComponent = {
             // Inicializar eventos
             this.inicializarEventos();
             
-        } catch (error) {
-            console.error('Error al renderizar clientes:', error);
-            container.innerHTML = `
+       } catch (error) {
+        console.error('Error al renderizar clientes:', error);
+        const appContainer = container || document.getElementById('app');
+        appContainer.innerHTML = `
                 <div class="alert alert-danger">
                     <h3>Error al cargar el módulo de clientes</h3>
                     <p>No se pudieron cargar los datos. Por favor, verifica tu conexión.</p>
