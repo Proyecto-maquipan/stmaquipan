@@ -859,4 +859,3 @@ const clientesComponent = {
     }
 };
 
-export default clientesComponent;
