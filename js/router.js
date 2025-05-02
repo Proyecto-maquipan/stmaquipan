@@ -51,7 +51,7 @@ const router = {
                     activeLink.classList.add('active');
                 }
                 
-                // Renderizar componente con parámetros
+                // Renderizar componente
                 if (component.render.constructor.name === 'AsyncFunction') {
                     // Componente asíncrono
                     await component.render(app, params);
