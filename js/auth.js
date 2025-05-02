@@ -13,20 +13,43 @@ const auth = {
     
     // Login
     login(username, password) {
-        const usuarios = storage.getUsuarios();
-        const usuario = usuarios.find(u => u.username === username && u.password === password);
+        console.log('Intentando login con:', username);
         
-        if (usuario) {
-            localStorage.setItem('maquipan_user', JSON.stringify(usuario));
-            return true;
+        // Verificar si storage está disponible
+        if (typeof storage === 'undefined') {
+            console.error('Storage no está definido');
+            alert('Error: El sistema de almacenamiento no está disponible');
+            return false;
         }
-        return false;
+        
+        try {
+            const usuarios = storage.getUsuarios();
+            console.log('Usuarios encontrados:', usuarios);
+            
+            const usuario = usuarios.find(u => u.username === username && u.password === password);
+            
+            if (usuario) {
+                localStorage.setItem('maquipan_user', JSON.stringify(usuario));
+                console.log('Login exitoso para:', usuario.nombre);
+                return true;
+            } else {
+                console.log('Usuario o contraseña incorrectos');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error en login:', error);
+            return false;
+        }
     },
     
     // Logout
     logout() {
         localStorage.removeItem('maquipan_user');
-        router.navigate('login');
+        if (typeof router !== 'undefined') {
+            router.navigate('login');
+        } else {
+            window.location.reload();
+        }
     },
     
     // Actualizar información de usuario en la UI
@@ -38,3 +61,9 @@ const auth = {
         }
     }
 };
+
+// Hacer auth disponible globalmente
+window.auth = auth;
+
+// Verificar que auth está disponible
+console.log('Auth inicializado:', window.auth ? 'OK' : 'ERROR');
