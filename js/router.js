@@ -92,3 +92,6 @@ const router = {
         this.navigate(hash || 'dashboard');
     }
 };
+
+// Hacer el router disponible globalmente
+window.router = router;
