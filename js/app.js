@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', function() {
     auth.updateUserInfo();
 });
 
+// El resto del código se mantiene igual...
+
 // Componente Login (para completar el sistema)
 const loginComponent = {
     render(container) {
