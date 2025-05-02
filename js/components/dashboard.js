@@ -35,6 +35,29 @@ const dashboardComponent = {
                     </div>
                 </div>
                 
+                <!-- NUEVA SECCIÓN: ACCESOS RÁPIDOS -->
+                <h3>Accesos Rápidos</h3>
+                <div class="dashboard-cards">
+                    <div class="card" style="cursor: pointer;" onclick="router.navigate('repuestos')">
+                        <div class="card-title">
+                            <i class="fas fa-tools"></i> Gestión de Repuestos
+                        </div>
+                        <div class="card-text">Administra el catálogo de repuestos</div>
+                    </div>
+                    <div class="card" style="cursor: pointer;" onclick="router.navigate('nuevo-requerimiento')">
+                        <div class="card-title">
+                            <i class="fas fa-file-invoice"></i> Nuevo Requerimiento
+                        </div>
+                        <div class="card-text">Crear nuevo requerimiento de servicio</div>
+                    </div>
+                    <div class="card" style="cursor: pointer;" onclick="router.navigate('nueva-cotizacion')">
+                        <div class="card-title">
+                            <i class="fas fa-calculator"></i> Nueva Cotización
+                        </div>
+                        <div class="card-text">Generar nueva cotización</div>
+                    </div>
+                </div>
+                
                 <h3>Últimos Requerimientos</h3>
                 <table class="data-table">
                     <thead>
