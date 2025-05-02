@@ -1,4 +1,3 @@
-// Sistema de almacenamiento híbrido (Local + Firebase)
 // Configuración de Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyD7wclJeO6O-9E2N3CiIFKXb_SyDgxBJdk",
@@ -9,22 +8,20 @@ const firebaseConfig = {
     appId: "1:186278901553:web:67caaee4ebb6279d5ee210"
 };
 
-// Variable global para verificar si Firebase está disponible
-let firebaseInitialized = false;
+// Inicializar Firebase
 let db;
+let firebaseInitialized = false;
 
 try {
-    // Inicializar Firebase
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     firebaseInitialized = true;
     console.log('Firebase inicializado correctamente');
 } catch (error) {
     console.error('Error inicializando Firebase:', error);
-    firebaseInitialized = false;
 }
 
-// Sistema de almacenamiento local
+// Sistema de almacenamiento híbrido
 const storage = {
     // Inicializar datos si no existen
     init() {
@@ -37,7 +34,7 @@ const storage = {
                     {
                         id: 1,
                         username: 'admin',
-                        password: 'admin123', // En producción, usar hash
+                        password: 'admin123',
                         nombre: 'Cristian Andrés Pimentel Mancilla',
                         rol: 'admin'
                     }
@@ -48,12 +45,43 @@ const storage = {
                     ultimoCliente: 0
                 }
             };
-            this.saveAll(initialData);
+            localStorage.setItem('maquipan_data', JSON.stringify(initialData));
+        }
+        
+        // Si Firebase está disponible, sincronizar datos
+        if (firebaseInitialized) {
+            this.syncLocalToFirebase();
         }
     },
 
     // Obtener todos los datos
-    getAll() {
+    async getAll() {
+        if (firebaseInitialized) {
+            try {
+                // Obtener datos de Firebase
+                const requerimientos = await this.getRequerimientosFromFirebase();
+                const cotizaciones = await this.getCotizacionesFromFirebase();
+                const clientes = await this.getClientesFromFirebase();
+                
+                // Mantener usuarios y config en local
+                const localData = JSON.parse(localStorage.getItem('maquipan_data'));
+                
+                const data = {
+                    requerimientos,
+                    cotizaciones,
+                    clientes,
+                    usuarios: localData.usuarios,
+                    config: localData.config
+                };
+                
+                // Actualizar localStorage con datos de Firebase
+                localStorage.setItem('maquipan_data', JSON.stringify(data));
+                return data;
+            } catch (error) {
+                console.error('Error obteniendo datos de Firebase:', error);
+            }
+        }
+        
         const data = localStorage.getItem('maquipan_data');
         return data ? JSON.parse(data) : null;
     },
@@ -65,37 +93,71 @@ const storage = {
 
     // Requerimientos
     getRequerimientos() {
-        const data = this.getAll();
+        if (firebaseInitialized) {
+            return this.getRequerimientosFromFirebase();
+        }
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.requerimientos : [];
     },
 
-    saveRequerimiento(requerimiento) {
-        const data = this.getAll();
+    async getRequerimientosFromFirebase() {
+        try {
+            const snapshot = await db.collection('requerimientos').get();
+            const requerimientos = [];
+            snapshot.forEach(doc => {
+                requerimientos.push({ ...doc.data(), firebaseId: doc.id });
+            });
+            return requerimientos.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+        } catch (error) {
+            console.error('Error obteniendo requerimientos de Firebase:', error);
+            return [];
+        }
+    },
+
+    async saveRequerimiento(requerimiento) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         data.config.ultimoRequerimiento++;
         requerimiento.id = 'REQ' + data.config.ultimoRequerimiento.toString().padStart(6, '0');
         data.requerimientos.unshift(requerimiento);
         this.saveAll(data);
         
-        // Intentar guardar en Firebase si está disponible
-        if (firebaseInitialized && db) {
-            db.collection('requerimientos').add(requerimiento)
-                .then(docRef => {
-                    console.log('Requerimiento guardado en Firebase con ID:', docRef.id);
-                })
-                .catch(error => {
-                    console.error('Error guardando en Firebase:', error);
-                });
+        // Guardar en Firebase
+        if (firebaseInitialized) {
+            try {
+                const docRef = await db.collection('requerimientos').add(requerimiento);
+                console.log('Requerimiento guardado en Firebase:', docRef.id);
+            } catch (error) {
+                console.error('Error guardando requerimiento en Firebase:', error);
+            }
         }
         
         return requerimiento.id;
     },
 
-    updateRequerimiento(id, requerimiento) {
-        const data = this.getAll();
+    async updateRequerimiento(id, requerimiento) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         const index = data.requerimientos.findIndex(r => r.id === id);
         if (index !== -1) {
             data.requerimientos[index] = { ...data.requerimientos[index], ...requerimiento };
             this.saveAll(data);
+            
+            // Actualizar en Firebase
+            if (firebaseInitialized) {
+                try {
+                    const snapshot = await db.collection('requerimientos')
+                        .where('id', '==', id)
+                        .get();
+                    
+                    if (!snapshot.empty) {
+                        const docRef = snapshot.docs[0].ref;
+                        await docRef.update(requerimiento);
+                        console.log('Requerimiento actualizado en Firebase');
+                    }
+                } catch (error) {
+                    console.error('Error actualizando requerimiento en Firebase:', error);
+                }
+            }
+            
             return true;
         }
         return false;
@@ -103,33 +165,139 @@ const storage = {
 
     // Cotizaciones
     getCotizaciones() {
-        const data = this.getAll();
+        if (firebaseInitialized) {
+            return this.getCotizacionesFromFirebase();
+        }
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.cotizaciones : [];
     },
 
-    saveCotizacion(cotizacion) {
-        const data = this.getAll();
+    async getCotizacionesFromFirebase() {
+        try {
+            const snapshot = await db.collection('cotizaciones').get();
+            const cotizaciones = [];
+            snapshot.forEach(doc => {
+                cotizaciones.push({ ...doc.data(), firebaseId: doc.id });
+            });
+            return cotizaciones.sort((a, b) => (b.numero || '').localeCompare(a.numero || ''));
+        } catch (error) {
+            console.error('Error obteniendo cotizaciones de Firebase:', error);
+            return [];
+        }
+    },
+
+    async saveCotizacion(cotizacion) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         data.config.ultimaCotizacion++;
         cotizacion.numero = data.config.ultimaCotizacion.toString().padStart(6, '0');
         data.cotizaciones.unshift(cotizacion);
         this.saveAll(data);
         
-        // Intentar guardar en Firebase si está disponible
-        if (firebaseInitialized && db) {
-            db.collection('cotizaciones').add(cotizacion)
-                .then(docRef => {
-                    console.log('Cotización guardada en Firebase con ID:', docRef.id);
-                })
-                .catch(error => {
-                    console.error('Error guardando en Firebase:', error);
-                });
+        // Guardar en Firebase
+        if (firebaseInitialized) {
+            try {
+                const docRef = await db.collection('cotizaciones').add(cotizacion);
+                console.log('Cotización guardada en Firebase:', docRef.id);
+            } catch (error) {
+                console.error('Error guardando cotización en Firebase:', error);
+            }
         }
         
         return cotizacion.numero;
     },
 
+    // Clientes
+    getClientes() {
+        if (firebaseInitialized) {
+            return this.getClientesFromFirebase();
+        }
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
+        return data ? data.clientes : [];
+    },
+
+    async getClientesFromFirebase() {
+        try {
+            const snapshot = await db.collection('clientes').get();
+            const clientes = [];
+            snapshot.forEach(doc => {
+                clientes.push({ ...doc.data(), firebaseId: doc.id });
+            });
+            return clientes;
+        } catch (error) {
+            console.error('Error obteniendo clientes de Firebase:', error);
+            return [];
+        }
+    },
+
+    async saveCliente(cliente) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
+        data.config.ultimoCliente++;
+        cliente.id = data.config.ultimoCliente;
+        data.clientes.push(cliente);
+        this.saveAll(data);
+        
+        // Guardar en Firebase
+        if (firebaseInitialized) {
+            try {
+                const docRef = await db.collection('clientes').add(cliente);
+                console.log('Cliente guardado en Firebase:', docRef.id);
+            } catch (error) {
+                console.error('Error guardando cliente en Firebase:', error);
+            }
+        }
+        
+        return cliente.id;
+    },
+
+    // Sincronizar datos locales a Firebase
+    async syncLocalToFirebase() {
+        if (!firebaseInitialized) return;
+        
+        try {
+            const data = JSON.parse(localStorage.getItem('maquipan_data'));
+            
+            // Sincronizar requerimientos
+            for (const req of data.requerimientos) {
+                const snapshot = await db.collection('requerimientos')
+                    .where('id', '==', req.id)
+                    .get();
+                
+                if (snapshot.empty) {
+                    await db.collection('requerimientos').add(req);
+                }
+            }
+            
+            // Sincronizar cotizaciones
+            for (const cot of data.cotizaciones) {
+                const snapshot = await db.collection('cotizaciones')
+                    .where('numero', '==', cot.numero)
+                    .get();
+                
+                if (snapshot.empty) {
+                    await db.collection('cotizaciones').add(cot);
+                }
+            }
+            
+            // Sincronizar clientes
+            for (const cli of data.clientes) {
+                const snapshot = await db.collection('clientes')
+                    .where('id', '==', cli.id)
+                    .get();
+                
+                if (snapshot.empty) {
+                    await db.collection('clientes').add(cli);
+                }
+            }
+            
+            console.log('Datos sincronizados con Firebase');
+        } catch (error) {
+            console.error('Error sincronizando con Firebase:', error);
+        }
+    },
+
+    // Métodos restantes sin cambios...
     updateCotizacion(numero, cotizacion) {
-        const data = this.getAll();
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         const index = data.cotizaciones.findIndex(c => c.numero === numero);
         if (index !== -1) {
             data.cotizaciones[index] = { ...data.cotizaciones[index], ...cotizacion };
@@ -139,35 +307,8 @@ const storage = {
         return false;
     },
 
-    // Clientes
-    getClientes() {
-        const data = this.getAll();
-        return data ? data.clientes : [];
-    },
-
-    saveCliente(cliente) {
-        const data = this.getAll();
-        data.config.ultimoCliente++;
-        cliente.id = data.config.ultimoCliente;
-        data.clientes.push(cliente);
-        this.saveAll(data);
-        
-        // Intentar guardar en Firebase si está disponible
-        if (firebaseInitialized && db) {
-            db.collection('clientes').add(cliente)
-                .then(docRef => {
-                    console.log('Cliente guardado en Firebase con ID:', docRef.id);
-                })
-                .catch(error => {
-                    console.error('Error guardando en Firebase:', error);
-                });
-        }
-        
-        return cliente.id;
-    },
-
     updateCliente(id, cliente) {
-        const data = this.getAll();
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         const index = data.clientes.findIndex(c => c.id === id);
         if (index !== -1) {
             data.clientes[index] = { ...data.clientes[index], ...cliente };
@@ -177,15 +318,13 @@ const storage = {
         return false;
     },
 
-    // Usuarios
     getUsuarios() {
-        const data = this.getAll();
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.usuarios : [];
     },
 
-    // Búsqueda
     search(type, query) {
-        const data = this.getAll();
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         query = query.toLowerCase();
         
         switch(type) {
@@ -210,9 +349,8 @@ const storage = {
         }
     },
 
-    // Estadísticas para el dashboard
     getDashboardStats() {
-        const data = this.getAll();
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return {
             requerimientosPendientes: data.requerimientos.filter(r => r.estado === 'Pendiente').length,
             cotizacionesActivas: data.cotizaciones.filter(c => c.estado === 'Activa').length,
@@ -227,3 +365,5 @@ storage.init();
 
 // Hacer storage disponible globalmente
 window.storage = storage;
+
+console.log('Storage con Firebase inicializado correctamente');
