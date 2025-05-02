@@ -1,353 +1,328 @@
-// Configuración de Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyD7wclJeO6O-9E2N3CiIFKXb_SyDgxBJdk",
-    authDomain: "portal-maquipan.firebaseapp.com",
-    projectId: "portal-maquipan",
-    storageBucket: "portal-maquipan.firebasestorage.app",
-    messagingSenderId: "186278901553",
-    appId: "1:186278901553:web:67caaee4ebb6279d5ee210"
-};
+// Storage.js - Sistema de almacenamiento con Firebase
 
-// Inicializar Firebase
+// Usar la instancia de Firebase ya inicializada
 let db;
 let firebaseInitialized = false;
 
 try {
-    firebase.initializeApp(firebaseConfig);
+    // Obtenemos la referencia a la instancia existente de Firestore
     db = firebase.firestore();
     firebaseInitialized = true;
-    console.log('Firebase inicializado correctamente');
+    console.log('Storage con Firebase inicializado correctamente');
 } catch (error) {
-    console.error('Error inicializando Firebase:', error);
+    console.error('Error accediendo a Firebase en storage.js:', error);
 }
 
-// Sistema de almacenamiento híbrido
+// Sistema de almacenamiento con Firebase
 const storage = {
-    // Inicializar datos si no existen
-    init() {
-        if (!localStorage.getItem('maquipan_data')) {
-            const initialData = {
-                requerimientos: [],
-                cotizaciones: [],
-                clientes: [],
-                usuarios: [
-                    {
-                        id: 1,
-                        username: 'admin',
-                        password: 'admin123',
-                        nombre: 'Cristian Andrés Pimentel Mancilla',
-                        rol: 'admin'
-                    }
-                ],
-                config: {
-                    ultimoRequerimiento: 0,
-                    ultimaCotizacion: 0,
-                    ultimoCliente: 0
-                }
-            };
-            localStorage.setItem('maquipan_data', JSON.stringify(initialData));
+    // Inicializar datos si es necesario
+    async init() {
+        if (!firebaseInitialized) {
+            console.error('Firebase no está inicializado correctamente');
+            return;
         }
         
-        // Si Firebase está disponible, sincronizar datos
-        if (firebaseInitialized) {
-            this.syncLocalToFirebase();
-        }
-    },
-
-    // Obtener todos los datos
-    async getAll() {
-        if (firebaseInitialized) {
-            try {
-                // Obtener datos de Firebase
-                const requerimientos = await this.getRequerimientosFromFirebase();
-                const cotizaciones = await this.getCotizacionesFromFirebase();
-                const clientes = await this.getClientesFromFirebase();
-                
-                // Mantener usuarios y config en local
-                const localData = JSON.parse(localStorage.getItem('maquipan_data'));
-                
-                const data = {
-                    requerimientos,
-                    cotizaciones,
-                    clientes,
-                    usuarios: localData.usuarios,
-                    config: localData.config
-                };
-                
-                // Actualizar localStorage con datos de Firebase
-                localStorage.setItem('maquipan_data', JSON.stringify(data));
-                return data;
-            } catch (error) {
-                console.error('Error obteniendo datos de Firebase:', error);
-            }
-        }
+        // Verificar si existen usuarios administradores
+        const usuariosSnapshot = await db.collection('usuarios').where('rol', '==', 'admin').get();
         
-        const data = localStorage.getItem('maquipan_data');
-        return data ? JSON.parse(data) : null;
-    },
-
-    // Guardar todos los datos
-    saveAll(data) {
-        localStorage.setItem('maquipan_data', JSON.stringify(data));
+        // Si no hay usuarios, crear uno por defecto
+        if (usuariosSnapshot.empty) {
+            await db.collection('usuarios').add({
+                username: 'admin',
+                password: 'admin123',
+                nombre: 'Cristian Andrés Pimentel Mancilla',
+                rol: 'admin',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log('Usuario administrador por defecto creado');
+        }
     },
 
     // Requerimientos
-getRequerimientos() {
-    const data = JSON.parse(localStorage.getItem('maquipan_data'));
-    return data ? data.requerimientos : [];
-},
-
-    async getRequerimientosFromFirebase() {
+    async getRequerimientos() {
+        if (!firebaseInitialized) return [];
+        
         try {
             const snapshot = await db.collection('requerimientos').get();
             const requerimientos = [];
             snapshot.forEach(doc => {
-                requerimientos.push({ ...doc.data(), firebaseId: doc.id });
+                requerimientos.push({ ...doc.data(), id: doc.id });
             });
-            return requerimientos.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+            return requerimientos.sort((a, b) => (b.numero || '').localeCompare(a.numero || ''));
         } catch (error) {
-            console.error('Error obteniendo requerimientos de Firebase:', error);
+            console.error('Error obteniendo requerimientos:', error);
             return [];
         }
     },
 
     async saveRequerimiento(requerimiento) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        data.config.ultimoRequerimiento++;
-        requerimiento.id = 'REQ' + data.config.ultimoRequerimiento.toString().padStart(6, '0');
-        data.requerimientos.unshift(requerimiento);
-        this.saveAll(data);
+        if (!firebaseInitialized) return null;
         
-        // Guardar en Firebase
-        if (firebaseInitialized) {
-            try {
-                const docRef = await db.collection('requerimientos').add(requerimiento);
-                console.log('Requerimiento guardado en Firebase:', docRef.id);
-            } catch (error) {
-                console.error('Error guardando requerimiento en Firebase:', error);
+        try {
+            // Generar número secuencial
+            const counterRef = db.collection('counters').doc('requerimiento');
+            const counterDoc = await counterRef.get();
+            
+            let nextNumber = 1000;
+            if (counterDoc.exists) {
+                nextNumber = counterDoc.data().value + 1;
+                await counterRef.update({ value: nextNumber });
+            } else {
+                await counterRef.set({ value: nextNumber });
             }
+            
+            requerimiento.numero = `REQ-${nextNumber}`;
+            requerimiento.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            
+            const docRef = await db.collection('requerimientos').add(requerimiento);
+            
+            // Actualizar con el ID
+            await docRef.update({ id: docRef.id });
+            
+            return requerimiento.numero;
+        } catch (error) {
+            console.error('Error guardando requerimiento:', error);
+            return null;
         }
-        
-        return requerimiento.id;
     },
 
     async updateRequerimiento(id, requerimiento) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        const index = data.requerimientos.findIndex(r => r.id === id);
-        if (index !== -1) {
-            data.requerimientos[index] = { ...data.requerimientos[index], ...requerimiento };
-            this.saveAll(data);
-            
-            // Actualizar en Firebase
-            if (firebaseInitialized) {
-                try {
-                    const snapshot = await db.collection('requerimientos')
-                        .where('id', '==', id)
-                        .get();
-                    
-                    if (!snapshot.empty) {
-                        const docRef = snapshot.docs[0].ref;
-                        await docRef.update(requerimiento);
-                        console.log('Requerimiento actualizado en Firebase');
-                    }
-                } catch (error) {
-                    console.error('Error actualizando requerimiento en Firebase:', error);
-                }
-            }
-            
+        if (!firebaseInitialized) return false;
+        
+        try {
+            requerimiento.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('requerimientos').doc(id).update(requerimiento);
             return true;
+        } catch (error) {
+            console.error('Error actualizando requerimiento:', error);
+            return false;
         }
-        return false;
     },
 
     // Cotizaciones
-getCotizaciones() {
-    const data = JSON.parse(localStorage.getItem('maquipan_data'));
-    return data ? data.cotizaciones : [];
-},
-
-    async getCotizacionesFromFirebase() {
+    async getCotizaciones() {
+        if (!firebaseInitialized) return [];
+        
         try {
             const snapshot = await db.collection('cotizaciones').get();
             const cotizaciones = [];
             snapshot.forEach(doc => {
-                cotizaciones.push({ ...doc.data(), firebaseId: doc.id });
+                cotizaciones.push({ ...doc.data(), id: doc.id });
             });
             return cotizaciones.sort((a, b) => (b.numero || '').localeCompare(a.numero || ''));
         } catch (error) {
-            console.error('Error obteniendo cotizaciones de Firebase:', error);
+            console.error('Error obteniendo cotizaciones:', error);
             return [];
         }
     },
 
     async saveCotizacion(cotizacion) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        data.config.ultimaCotizacion++;
-        cotizacion.numero = data.config.ultimaCotizacion.toString().padStart(6, '0');
-        data.cotizaciones.unshift(cotizacion);
-        this.saveAll(data);
+        if (!firebaseInitialized) return null;
         
-        // Guardar en Firebase
-        if (firebaseInitialized) {
-            try {
-                const docRef = await db.collection('cotizaciones').add(cotizacion);
-                console.log('Cotización guardada en Firebase:', docRef.id);
-            } catch (error) {
-                console.error('Error guardando cotización en Firebase:', error);
+        try {
+            // Generar número secuencial
+            const counterRef = db.collection('counters').doc('cotizacion');
+            const counterDoc = await counterRef.get();
+            
+            let nextNumber = 1000;
+            if (counterDoc.exists) {
+                nextNumber = counterDoc.data().value + 1;
+                await counterRef.update({ value: nextNumber });
+            } else {
+                await counterRef.set({ value: nextNumber });
             }
+            
+            cotizacion.numero = `COT-${nextNumber}`;
+            cotizacion.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            
+            const docRef = await db.collection('cotizaciones').add(cotizacion);
+            
+            // Actualizar con el ID
+            await docRef.update({ id: docRef.id });
+            
+            return cotizacion.numero;
+        } catch (error) {
+            console.error('Error guardando cotización:', error);
+            return null;
         }
+    },
+
+    async updateCotizacion(id, cotizacion) {
+        if (!firebaseInitialized) return false;
         
-        return cotizacion.numero;
+        try {
+            cotizacion.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('cotizaciones').doc(id).update(cotizacion);
+            return true;
+        } catch (error) {
+            console.error('Error actualizando cotización:', error);
+            return false;
+        }
     },
 
     // Clientes
-getClientes() {
-    const data = JSON.parse(localStorage.getItem('maquipan_data'));
-    return data ? data.clientes : [];
-},
-
-    async getClientesFromFirebase() {
+    async getClientes() {
+        if (!firebaseInitialized) return [];
+        
         try {
             const snapshot = await db.collection('clientes').get();
             const clientes = [];
             snapshot.forEach(doc => {
-                clientes.push({ ...doc.data(), firebaseId: doc.id });
+                clientes.push({ ...doc.data(), id: doc.id });
             });
             return clientes;
         } catch (error) {
-            console.error('Error obteniendo clientes de Firebase:', error);
+            console.error('Error obteniendo clientes:', error);
             return [];
         }
     },
 
     async saveCliente(cliente) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        data.config.ultimoCliente++;
-        cliente.id = data.config.ultimoCliente;
-        data.clientes.push(cliente);
-        this.saveAll(data);
-        
-        // Guardar en Firebase
-        if (firebaseInitialized) {
-            try {
-                const docRef = await db.collection('clientes').add(cliente);
-                console.log('Cliente guardado en Firebase:', docRef.id);
-            } catch (error) {
-                console.error('Error guardando cliente en Firebase:', error);
-            }
-        }
-        
-        return cliente.id;
-    },
-
-    // Sincronizar datos locales a Firebase
-    async syncLocalToFirebase() {
-        if (!firebaseInitialized) return;
+        if (!firebaseInitialized) return null;
         
         try {
-            const data = JSON.parse(localStorage.getItem('maquipan_data'));
+            // Generar código secuencial
+            const counterRef = db.collection('counters').doc('cliente');
+            const counterDoc = await counterRef.get();
             
-            // Sincronizar requerimientos
-            for (const req of data.requerimientos) {
-                const snapshot = await db.collection('requerimientos')
-                    .where('id', '==', req.id)
-                    .get();
-                
-                if (snapshot.empty) {
-                    await db.collection('requerimientos').add(req);
-                }
+            let nextNumber = 1000;
+            if (counterDoc.exists) {
+                nextNumber = counterDoc.data().value + 1;
+                await counterRef.update({ value: nextNumber });
+            } else {
+                await counterRef.set({ value: nextNumber });
             }
             
-            // Sincronizar cotizaciones
-            for (const cot of data.cotizaciones) {
-                const snapshot = await db.collection('cotizaciones')
-                    .where('numero', '==', cot.numero)
-                    .get();
-                
-                if (snapshot.empty) {
-                    await db.collection('cotizaciones').add(cot);
-                }
-            }
+            cliente.codigo = `CLI-${nextNumber}`;
+            cliente.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
-            // Sincronizar clientes
-            for (const cli of data.clientes) {
-                const snapshot = await db.collection('clientes')
-                    .where('id', '==', cli.id)
-                    .get();
-                
-                if (snapshot.empty) {
-                    await db.collection('clientes').add(cli);
-                }
-            }
+            const docRef = await db.collection('clientes').add(cliente);
             
-            console.log('Datos sincronizados con Firebase');
+            // Actualizar con el ID
+            await docRef.update({ id: docRef.id });
+            
+            return cliente.codigo;
         } catch (error) {
-            console.error('Error sincronizando con Firebase:', error);
+            console.error('Error guardando cliente:', error);
+            return null;
         }
     },
 
-    // Métodos restantes sin cambios...
-    updateCotizacion(numero, cotizacion) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        const index = data.cotizaciones.findIndex(c => c.numero === numero);
-        if (index !== -1) {
-            data.cotizaciones[index] = { ...data.cotizaciones[index], ...cotizacion };
-            this.saveAll(data);
-            return true;
-        }
-        return false;
-    },
-
-    updateCliente(id, cliente) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        const index = data.clientes.findIndex(c => c.id === id);
-        if (index !== -1) {
-            data.clientes[index] = { ...data.clientes[index], ...cliente };
-            this.saveAll(data);
-            return true;
-        }
-        return false;
-    },
-
-    getUsuarios() {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        return data ? data.usuarios : [];
-    },
-
-    search(type, query) {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        query = query.toLowerCase();
+    async updateCliente(id, cliente) {
+        if (!firebaseInitialized) return false;
         
-        switch(type) {
-            case 'requerimiento':
-                return data.requerimientos.filter(r => 
-                    r.id.toLowerCase().includes(query) ||
-                    r.cliente.toLowerCase().includes(query) ||
-                    r.tecnico.toLowerCase().includes(query)
-                );
-            case 'cotizacion':
-                return data.cotizaciones.filter(c => 
-                    c.numero.toLowerCase().includes(query) ||
-                    c.cliente.toLowerCase().includes(query)
-                );
-            case 'cliente':
-                return data.clientes.filter(c => 
-                    c.rut.toLowerCase().includes(query) ||
-                    c.razonSocial.toLowerCase().includes(query)
-                );
-            default:
-                return [];
+        try {
+            cliente.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('clientes').doc(id).update(cliente);
+            return true;
+        } catch (error) {
+            console.error('Error actualizando cliente:', error);
+            return false;
         }
     },
 
-    getDashboardStats() {
-        const data = JSON.parse(localStorage.getItem('maquipan_data'));
-        return {
-            requerimientosPendientes: data.requerimientos.filter(r => r.estado === 'Pendiente').length,
-            cotizacionesActivas: data.cotizaciones.filter(c => c.estado === 'Activa').length,
-            serviciosCompletados: data.requerimientos.filter(r => r.estado === 'Completado').length,
-            clientesActivos: data.clientes.length
-        };
+    async deleteCliente(id) {
+        if (!firebaseInitialized) return false;
+        
+        try {
+            await db.collection('clientes').doc(id).delete();
+            return true;
+        } catch (error) {
+            console.error('Error eliminando cliente:', error);
+            return false;
+        }
+    },
+
+    // Búsqueda
+    async search(type, query) {
+        if (!firebaseInitialized) return [];
+        
+        try {
+            query = query.toLowerCase();
+            let results = [];
+            
+            switch(type) {
+                case 'requerimiento':
+                    const requerimientos = await this.getRequerimientos();
+                    results = requerimientos.filter(r => 
+                        (r.numero && r.numero.toLowerCase().includes(query)) ||
+                        (r.cliente && r.cliente.toLowerCase().includes(query)) ||
+                        (r.tecnico && r.tecnico.toLowerCase().includes(query))
+                    );
+                    break;
+                    
+                case 'cotizacion':
+                    const cotizaciones = await this.getCotizaciones();
+                    results = cotizaciones.filter(c => 
+                        (c.numero && c.numero.toLowerCase().includes(query)) ||
+                        (c.cliente && c.cliente.toLowerCase().includes(query))
+                    );
+                    break;
+                    
+                case 'cliente':
+                    const clientes = await this.getClientes();
+                    results = clientes.filter(c => 
+                        (c.rut && c.rut.toLowerCase().includes(query)) ||
+                        (c.razonSocial && c.razonSocial.toLowerCase().includes(query)) ||
+                        (c.contacto && c.contacto.toLowerCase().includes(query))
+                    );
+                    break;
+            }
+            
+            return results;
+        } catch (error) {
+            console.error('Error realizando búsqueda:', error);
+            return [];
+        }
+    },
+
+    // Estadísticas para el dashboard
+    async getDashboardStats() {
+        if (!firebaseInitialized) return {};
+        
+        try {
+            const requerimientosSnapshot = await db.collection('requerimientos').get();
+            const cotizacionesSnapshot = await db.collection('cotizaciones').get();
+            const clientesSnapshot = await db.collection('clientes').get();
+            
+            const requerimientos = [];
+            requerimientosSnapshot.forEach(doc => requerimientos.push(doc.data()));
+            
+            const cotizaciones = [];
+            cotizacionesSnapshot.forEach(doc => cotizaciones.push(doc.data()));
+            
+            return {
+                requerimientosPendientes: requerimientos.filter(r => r.estado === 'Pendiente').length,
+                cotizacionesActivas: cotizaciones.filter(c => c.estado === 'Activa').length,
+                serviciosCompletados: requerimientos.filter(r => r.estado === 'Completado').length,
+                clientesActivos: clientesSnapshot.size
+            };
+        } catch (error) {
+            console.error('Error obteniendo estadísticas:', error);
+            return {
+                requerimientosPendientes: 0,
+                cotizacionesActivas: 0,
+                serviciosCompletados: 0,
+                clientesActivos: 0
+            };
+        }
+    },
+
+    // Usuarios
+    async getUsuarios() {
+        if (!firebaseInitialized) return [];
+        
+        try {
+            const snapshot = await db.collection('usuarios').get();
+            const usuarios = [];
+            snapshot.forEach(doc => {
+                usuarios.push({ ...doc.data(), id: doc.id });
+            });
+            return usuarios;
+        } catch (error) {
+            console.error('Error obteniendo usuarios:', error);
+            return [];
+        }
     }
 };
 
