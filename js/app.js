@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
     router.register('login', loginComponent);
+    // IMPORTANTE: Registrar la ruta de repuestos
+    router.register('repuestos', repuestosComponent);
     
     // Cargar datos de ejemplo
     cargarDatosEjemplo();
