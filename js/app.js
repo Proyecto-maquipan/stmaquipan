@@ -1,5 +1,21 @@
 // Archivo principal de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
+    // Verificar que todos los objetos necesarios estén disponibles
+    if (typeof storage === 'undefined') {
+        console.error('Storage no está definido');
+        return;
+    }
+    
+    if (typeof auth === 'undefined') {
+        console.error('Auth no está definido');
+        return;
+    }
+    
+    if (typeof router === 'undefined') {
+        console.error('Router no está definido');
+        return;
+    }
+    
     // Registrar rutas
     router.register('dashboard', dashboardComponent);
     router.register('requerimientos', requerimientosComponent);
@@ -10,6 +26,9 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
     router.register('login', loginComponent);
+    
+    // Cargar datos de ejemplo
+    cargarDatosEjemplo();
     
     // Inicializar router
     router.init();
@@ -95,31 +114,40 @@ function generarPDFCotizacion(numero) {
 
 // Cargar algunos datos de ejemplo si no existen
 function cargarDatosEjemplo() {
-    const data = storage.getAll();
+    if (typeof storage === 'undefined') {
+        console.error('Storage no está disponible para cargar datos de ejemplo');
+        return;
+    }
     
-    // Si no hay clientes, agregar algunos de ejemplo
-    if (data.clientes.length === 0) {
-        storage.saveCliente({
-            rut: '81201000-K',
-            razonSocial: 'CENCOSUD RETAIL S.A.',
-            direccion: 'AV. KENNEDY N°9001, 5 PISO',
-            ciudad: 'SANTIAGO',
-            contacto: 'LUIS VALENZUELA',
-            telefono: '229590555',
-            email: 'luis.valenzuela@cencosud.cl'
-        });
+    try {
+        const data = storage.getAll();
         
-        storage.saveCliente({
-            rut: '86627700-5',
-            razonSocial: 'HIPERMERCADO TOTTUS S.A.',
-            direccion: 'MALL PLAZA OESTE',
-            ciudad: 'SANTIAGO',
-            contacto: 'MARIA GONZALEZ',
-            telefono: '226547890',
-            email: 'maria.gonzalez@tottus.cl'
-        });
+        // Si no hay clientes, agregar algunos de ejemplo
+        if (data && data.clientes && data.clientes.length === 0) {
+            storage.saveCliente({
+                rut: '81201000-K',
+                razonSocial: 'CENCOSUD RETAIL S.A.',
+                direccion: 'AV. KENNEDY N°9001, 5 PISO',
+                ciudad: 'SANTIAGO',
+                contacto: 'LUIS VALENZUELA',
+                telefono: '229590555',
+                email: 'luis.valenzuela@cencosud.cl'
+            });
+            
+            storage.saveCliente({
+                rut: '86627700-5',
+                razonSocial: 'HIPERMERCADO TOTTUS S.A.',
+                direccion: 'MALL PLAZA OESTE',
+                ciudad: 'SANTIAGO',
+                contacto: 'MARIA GONZALEZ',
+                telefono: '226547890',
+                email: 'maria.gonzalez@tottus.cl'
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando datos de ejemplo:', error);
     }
 }
 
-// Cargar datos de ejemplo al iniciar
-cargarDatosEjemplo();
+// NO cargar datos de ejemplo aquí, se hace dentro de DOMContentLoaded
+// cargarDatosEjemplo(); // ELIMINAR ESTA LÍNEA
