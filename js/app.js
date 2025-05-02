@@ -96,7 +96,8 @@ const loginComponent = {
 
 // Función para generar PDF de requerimiento (ejemplo básico)
 function generarPDF(reqId) {
-    const requerimiento = storage.getRequerimientos().find(r => r.id === reqId);
+    const requerimientos = await storage.getRequerimientos();
+    const requerimiento = requerimientos.find(r => r.id === reqId);
     if (requerimiento) {
         // En una implementación real, aquí usaríamos una librería como jsPDF
         alert(`Generando PDF para requerimiento ${reqId}...\n` +
@@ -106,7 +107,8 @@ function generarPDF(reqId) {
 
 // Función para generar PDF de cotización (ejemplo básico)
 function generarPDFCotizacion(numero) {
-    const cotizacion = storage.getCotizaciones().find(c => c.numero === numero);
+    const cotizaciones = await storage.getCotizaciones();
+    const cotizacion = cotizaciones.find(c => c.numero === numero);
     if (cotizacion) {
         // En una implementación real, aquí usaríamos una librería como jsPDF
         alert(`Generando PDF para cotización ${numero}...\n` +
@@ -115,18 +117,20 @@ function generarPDFCotizacion(numero) {
 }
 
 // Cargar algunos datos de ejemplo si no existen
-function cargarDatosEjemplo() {
+async function cargarDatosEjemplo() {
     if (typeof storage === 'undefined') {
         console.error('Storage no está disponible para cargar datos de ejemplo');
         return;
     }
     
     try {
-        const data = storage.getAll();
+        // En lugar de usar getAll (que ahora hemos hecho compatible)
+        // Preferimos usar los métodos directos
+        const clientes = await storage.getClientes();
         
         // Si no hay clientes, agregar algunos de ejemplo
-        if (data && data.clientes && data.clientes.length === 0) {
-            storage.saveCliente({
+        if (clientes && clientes.length === 0) {
+            await storage.saveCliente({
                 rut: '81201000-K',
                 razonSocial: 'CENCOSUD RETAIL S.A.',
                 direccion: 'AV. KENNEDY N°9001, 5 PISO',
@@ -136,7 +140,7 @@ function cargarDatosEjemplo() {
                 email: 'luis.valenzuela@cencosud.cl'
             });
             
-            storage.saveCliente({
+            await storage.saveCliente({
                 rut: '86627700-5',
                 razonSocial: 'HIPERMERCADO TOTTUS S.A.',
                 direccion: 'MALL PLAZA OESTE',
@@ -150,6 +154,3 @@ function cargarDatosEjemplo() {
         console.error('Error cargando datos de ejemplo:', error);
     }
 }
-
-// NO cargar datos de ejemplo aquí, se hace dentro de DOMContentLoaded
-// cargarDatosEjemplo(); // ELIMINAR ESTA LÍNEA
