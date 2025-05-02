@@ -137,7 +137,7 @@ const storage = {
                 await counterRef.set({ value: nextNumber });
             }
             
-            // Cambio aquí: En lugar de usar template literals (backticks), usar concatenación de cadenas
+            // Cambio: usar concatenación regular en lugar de template literals
             requerimiento.numero = "REQ-" + nextNumber;
             requerimiento.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
@@ -199,7 +199,7 @@ const storage = {
                 await counterRef.set({ value: nextNumber });
             }
             
-            // Cambio aquí también: usar concatenación de cadenas en lugar de template literals
+            // Cambio: usar concatenación regular en lugar de template literals
             cotizacion.numero = "COT-" + nextNumber;
             cotizacion.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
@@ -261,7 +261,7 @@ const storage = {
                 await counterRef.set({ value: nextNumber });
             }
             
-            // Cambio similar aquí
+            // Cambio: usar concatenación regular en lugar de template literals
             cliente.codigo = "CLI-" + nextNumber;
             cliente.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             
