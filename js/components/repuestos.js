@@ -1,4 +1,4 @@
-// Componente de Gestión de Repuestos - Versión Optimizada
+// Componente de Gestión de Repuestos - Versión Optimizada con Ordenamiento por Nombre
 const repuestosComponent = {
     datosTemporales: [],
     currentPage: 1,
@@ -7,6 +7,8 @@ const repuestosComponent = {
     lastVisible: null,
     searchTerm: '',
     searchTimeout: null,
+    ordenamiento: 'nombre', // Por defecto ordenar por nombre
+    direccionOrden: 'asc', // Por defecto ascendente
     
     async render(container) {
         try {
@@ -20,13 +22,23 @@ const repuestosComponent = {
 
                     <!-- Barra de búsqueda y botones -->
                     <div class="row mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="input-group">
                                 <input type="text" class="form-control" id="searchInput" placeholder="Buscar por código o nombre...">
                                 <button class="btn btn-outline-secondary" type="button" onclick="repuestosComponent.buscarRepuestos()">
                                     <i class="fas fa-search"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="ordenamiento" onchange="repuestosComponent.cambiarOrdenamiento()">
+                                <option value="nombre-asc" selected>Nombre (A-Z)</option>
+                                <option value="nombre-desc">Nombre (Z-A)</option>
+                                <option value="codigo-asc">Código (A-Z)</option>
+                                <option value="codigo-desc">Código (Z-A)</option>
+                                <option value="precio-asc">Precio (menor a mayor)</option>
+                                <option value="precio-desc">Precio (mayor a menor)</option>
+                            </select>
                         </div>
                         <div class="col-md-6 text-end">
                             <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addRepuestoModal">
@@ -241,7 +253,7 @@ const repuestosComponent = {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
             
             let query = firebase.firestore().collection('repuestos')
-                .orderBy('codigo')
+                .orderBy(this.ordenamiento, this.direccionOrden)
                 .limit(this.itemsPerPage);
             
             // Si no es la primera página, usar el último documento visible
@@ -288,6 +300,18 @@ const repuestosComponent = {
             console.error('Error al cargar repuestos paginados:', error);
             Swal.fire('Error', 'No se pudieron cargar los repuestos', 'error');
         }
+    },
+
+    cambiarOrdenamiento() {
+        const ordenamientoSelect = document.getElementById('ordenamiento');
+        const [campo, direccion] = ordenamientoSelect.value.split('-');
+        
+        this.ordenamiento = campo;
+        this.direccionOrden = direccion;
+        this.currentPage = 1;
+        this.lastVisible = null;
+        
+        this.cargarRepuestosPaginados();
     },
 
     actualizarPaginacion() {
@@ -671,6 +695,102 @@ const repuestosComponent = {
                 console.error('Error al eliminar:', error);
                 Swal.fire('Error', 'No se pudo eliminar el repuesto', 'error');
             }
+        }
+    },
+
+    async editarRepuesto(id) {
+        try {
+            const doc = await firebase.firestore().collection('repuestos').doc(id).get();
+            
+            if (!doc.exists) {
+                Swal.fire('Error', 'El repuesto no existe', 'error');
+                return;
+            }
+            
+            const repuesto = doc.data();
+            
+            // Crear modal de edición dinámicamente
+            const modalHtml = `
+                <div class="modal fade" id="editRepuestoModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Editar Repuesto</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="editRepuestoForm">
+                                    <div class="mb-3">
+                                        <label for="editCodigo" class="form-label">Código del Objeto</label>
+                                        <input type="text" class="form-control" id="editCodigo" value="${repuesto.codigo}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="editNombre" class="form-label">Nombre del Artículo</label>
+                                        <input type="text" class="form-control" id="editNombre" value="${repuesto.nombre}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="editPrecio" class="form-label">Precio</label>
+                                        <input type="number" class="form-control" id="editPrecio" value="${repuesto.precio}" step="0.01" required>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-primary" onclick="repuestosComponent.actualizarRepuesto('${id}')">Actualizar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Eliminar modal anterior si existe
+            const existingModal = document.getElementById('editRepuestoModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Agregar nuevo modal al DOM
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('editRepuestoModal'));
+            modal.show();
+            
+        } catch (error) {
+            console.error('Error al editar repuesto:', error);
+            Swal.fire('Error', 'No se pudo cargar el repuesto para editar', 'error');
+        }
+    },
+
+    async actualizarRepuesto(id) {
+        const codigo = document.getElementById('editCodigo').value;
+        const nombre = document.getElementById('editNombre').value;
+        const precio = parseFloat(document.getElementById('editPrecio').value);
+        
+        if (!codigo || !nombre || !precio) {
+            Swal.fire('Error', 'Todos los campos son requeridos', 'error');
+            return;
+        }
+        
+        try {
+            await firebase.firestore().collection('repuestos').doc(id).update({
+                codigo,
+                nombre,
+                precio,
+                fechaModificacion: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editRepuestoModal'));
+            modal.hide();
+            
+            Swal.fire('Éxito', 'Repuesto actualizado correctamente', 'success');
+            
+            // Recargar la página actual
+            this.cargarRepuestosPaginados(this.currentPage);
+            
+        } catch (error) {
+            console.error('Error al actualizar repuesto:', error);
+            Swal.fire('Error', 'No se pudo actualizar el repuesto', 'error');
         }
     },
 
