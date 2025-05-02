@@ -1,123 +1,145 @@
 // Componente Requerimientos
 const requerimientosComponent = {
-    render(container) {
-        const requerimientos = storage.getRequerimientos();
-        
-        container.innerHTML = `
-            <h2>Requerimientos</h2>
-            <div style="margin-bottom: 20px;">
-                <button class="btn btn-primary" onclick="router.navigate('nuevo-requerimiento')">
-                    Nuevo Requerimiento
-                </button>
-            </div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Cliente</th>
-                        <th>Contrato</th>
-                        <th>Técnico</th>
-                        <th>Fecha</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${requerimientos.map(req => `
+    async render(container) {
+        try {
+            // Esperar a que la promesa se resuelva
+            const requerimientos = await storage.getRequerimientos();
+            
+            container.innerHTML = `
+                <h2>Requerimientos</h2>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="router.navigate('nuevo-requerimiento')">
+                        Nuevo Requerimiento
+                    </button>
+                </div>
+                <table class="data-table">
+                    <thead>
                         <tr>
-                            <td>${req.id}</td>
-                            <td>${req.cliente}</td>
-                            <td>${req.contrato}</td>
-                            <td>${req.tecnico}</td>
-                            <td>${req.fecha}</td>
-                            <td>${req.estado}</td>
-                            <td>
-                                <button class="btn btn-primary" onclick="router.navigate('editar-requerimiento/${req.id}')">Editar</button>
-                                <button class="btn btn-success" onclick="generarPDF('${req.id}')">PDF</button>
-                            </td>
+                            <th>ID</th>
+                            <th>Cliente</th>
+                            <th>Contrato</th>
+                            <th>Técnico</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
+                    </thead>
+                    <tbody>
+                        ${requerimientos.map(req => `
+                            <tr>
+                                <td>${req.id}</td>
+                                <td>${req.cliente}</td>
+                                <td>${req.contrato}</td>
+                                <td>${req.tecnico}</td>
+                                <td>${req.fecha}</td>
+                                <td>${req.estado}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="router.navigate('editar-requerimiento/${req.id}')">Editar</button>
+                                    <button class="btn btn-success" onclick="generarPDF('${req.id}')">PDF</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } catch (error) {
+            console.error('Error al renderizar requerimientos:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    Error al cargar los requerimientos. Por favor, inténtelo de nuevo.
+                </div>
+                <button class="btn btn-primary" onclick="router.navigate('requerimientos')">Reintentar</button>
+            `;
+        }
     }
 };
 
 // Componente Nuevo Requerimiento
 const nuevoRequerimientoComponent = {
-    render(container) {
-        const clientes = storage.getClientes();
-        
-        container.innerHTML = `
-            <h2>Nuevo Requerimiento</h2>
-            <form id="formRequerimiento">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Cliente:</label>
-                        <select id="requerimiento-cliente" required>
-                            <option value="">Seleccione un cliente</option>
-                            ${clientes.map(cliente => `
-                                <option value="${cliente.razonSocial}">${cliente.razonSocial}</option>
-                            `).join('')}
-                        </select>
+    async render(container) {
+        try {
+            // Esperar a que la promesa se resuelva
+            const clientes = await storage.getClientes();
+            
+            container.innerHTML = `
+                <h2>Nuevo Requerimiento</h2>
+                <form id="formRequerimiento">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cliente:</label>
+                            <select id="requerimiento-cliente" required>
+                                <option value="">Seleccione un cliente</option>
+                                ${clientes.map(cliente => `
+                                    <option value="${cliente.razonSocial}">${cliente.razonSocial}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Contrato:</label>
+                            <input type="text" id="requerimiento-contrato" required>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Contrato:</label>
-                        <input type="text" id="requerimiento-contrato" required>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Técnico:</label>
+                            <select id="requerimiento-tecnico" required>
+                                <option value="">Seleccione un técnico</option>
+                                <option value="MORALES LIZAMA HUGO HERNAN">MORALES LIZAMA HUGO HERNAN</option>
+                                <option value="JUAN PEREZ">JUAN PEREZ</option>
+                                <option value="PEDRO GONZALEZ">PEDRO GONZALEZ</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha:</label>
+                            <input type="date" id="requerimiento-fecha" required>
+                        </div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label>Descripción del servicio:</label>
+                        <textarea id="requerimiento-descripcion" rows="4" required></textarea>
+                    </div>
+                    
+                    <h3>Datos del equipo</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Marca:</label>
+                            <input type="text" id="equipo-marca" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Modelo:</label>
+                            <input type="text" id="equipo-modelo" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Serie:</label>
+                            <input type="text" id="equipo-serie" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Guardar Requerimiento</button>
+                        <button type="button" class="btn btn-secondary" onclick="router.navigate('requerimientos')">Cancelar</button>
+                    </div>
+                </form>
+            `;
+            
+            // Agregar event listener al formulario
+            setTimeout(() => {
+                const form = document.getElementById('formRequerimiento');
+                if (form) {
+                    form.addEventListener('submit', this.handleSubmit);
+                }
+            }, 0);
+        } catch (error) {
+            console.error('Error al cargar clientes:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    Error al cargar los datos de clientes. Por favor, inténtelo de nuevo.
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Técnico:</label>
-                        <select id="requerimiento-tecnico" required>
-                            <option value="">Seleccione un técnico</option>
-                            <option value="MORALES LIZAMA HUGO HERNAN">MORALES LIZAMA HUGO HERNAN</option>
-                            <option value="JUAN PEREZ">JUAN PEREZ</option>
-                            <option value="PEDRO GONZALEZ">PEDRO GONZALEZ</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha:</label>
-                        <input type="date" id="requerimiento-fecha" required>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Descripción del servicio:</label>
-                    <textarea id="requerimiento-descripcion" rows="4" required></textarea>
-                </div>
-                
-                <h3>Datos del equipo</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Marca:</label>
-                        <input type="text" id="equipo-marca" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Modelo:</label>
-                        <input type="text" id="equipo-modelo" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Serie:</label>
-                        <input type="text" id="equipo-serie" required>
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Guardar Requerimiento</button>
-                    <button type="button" class="btn btn-secondary" onclick="router.navigate('requerimientos')">Cancelar</button>
-                </div>
-            </form>
-        `;
-        
-        // Agregar event listener al formulario
-        setTimeout(() => {
-            const form = document.getElementById('formRequerimiento');
-            if (form) {
-                form.addEventListener('submit', this.handleSubmit);
-            }
-        }, 0);
+                <button class="btn btn-primary" onclick="router.navigate('nuevo-requerimiento')">Reintentar</button>
+            `;
+        }
     },
     
     handleSubmit(e) {
@@ -138,8 +160,14 @@ const nuevoRequerimientoComponent = {
             fechaCreacion: new Date().toISOString()
         };
         
-        const id = storage.saveRequerimiento(requerimiento);
-        alert(`Requerimiento ${id} creado exitosamente`);
-        router.navigate('requerimientos');
+        storage.saveRequerimiento(requerimiento)
+            .then(id => {
+                alert(`Requerimiento ${id} creado exitosamente`);
+                router.navigate('requerimientos');
+            })
+            .catch(error => {
+                console.error('Error al guardar requerimiento:', error);
+                alert('Error al guardar el requerimiento. Por favor, inténtelo de nuevo.');
+            });
     }
 };
