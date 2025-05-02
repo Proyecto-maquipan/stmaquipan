@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('clientes', clientesComponent);
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
-    router.register('login', loginComponent);
+    router.register('login', loginComponent); // ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ PRESENTE
     // IMPORTANTE: Registrar la ruta de repuestos
     router.register('repuestos', repuestosComponent);
     
