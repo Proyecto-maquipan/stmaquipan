@@ -11,8 +11,8 @@ const auth = {
         return userStr ? JSON.parse(userStr) : null;
     },
     
-    // Login
-    login(username, password) {
+    // Login - Modificado para ser async
+    async login(username, password) {
         console.log('Intentando login con:', username);
         
         // Verificar si storage está disponible
@@ -23,7 +23,8 @@ const auth = {
         }
         
         try {
-            const usuarios = storage.getUsuarios();
+            // Cambio clave: Esperar a que se resuelva la promesa
+            const usuarios = await storage.getUsuarios();
             console.log('Usuarios encontrados:', usuarios);
             
             const usuario = usuarios.find(u => u.username === username && u.password === password);
