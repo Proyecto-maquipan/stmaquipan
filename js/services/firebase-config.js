@@ -23,7 +23,8 @@ const COLLECTIONS = {
     COTIZACIONES: 'cotizaciones',
     CLIENTES: 'clientes',
     USERS: 'users',
-    COUNTERS: 'counters'
+    COUNTERS: 'counters',
+    REPUESTOS: 'repuestos'
 };
 
 // Servicio de sincronización con Firebase
