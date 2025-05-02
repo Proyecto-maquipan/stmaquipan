@@ -2,36 +2,40 @@
 // Componente para crear nuevos clientes
 
 const nuevoClienteComponent = {
-    render: function() {
-        const appContainer = document.getElementById('app');
+    render: function(container) {
+        const appContainer = container || document.getElementById('app');
         
         const template = `
             <div class="component-container">
                 <h2>Nuevo Cliente</h2>
                 <form id="nuevoClienteForm" class="form-container">
                     <div class="form-group">
-                        <label for="nombre">Nombre o Razón Social:</label>
-                        <input type="text" id="nombre" name="nombre" required>
+                        <label for="rut">RUT:</label>
+                        <input type="text" id="rut" name="rut" class="form-control" required pattern="[0-9]{1,8}-[0-9kK]{1}" placeholder="12345678-9">
                     </div>
                     <div class="form-group">
-                        <label for="rut">RUT:</label>
-                        <input type="text" id="rut" name="rut" required>
+                        <label for="razonSocial">Razón Social:</label>
+                        <input type="text" id="razonSocial" name="razonSocial" class="form-control" required>
                     </div>
                     <div class="form-group">
                         <label for="direccion">Dirección:</label>
-                        <input type="text" id="direccion" name="direccion">
+                        <input type="text" id="direccion" name="direccion" class="form-control" required>
                     </div>
                     <div class="form-group">
-                        <label for="telefono">Teléfono:</label>
-                        <input type="tel" id="telefono" name="telefono">
-                    </div>
-                    <div class="form-group">
-                        <label for="email">Email:</label>
-                        <input type="email" id="email" name="email">
+                        <label for="ciudad">Ciudad:</label>
+                        <input type="text" id="ciudad" name="ciudad" class="form-control" required>
                     </div>
                     <div class="form-group">
                         <label for="contacto">Persona de Contacto:</label>
-                        <input type="text" id="contacto" name="contacto">
+                        <input type="text" id="contacto" name="contacto" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="telefono">Teléfono:</label>
+                        <input type="tel" id="telefono" name="telefono" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" class="form-control">
                     </div>
                     <div class="button-group">
                         <button type="submit" class="btn btn-primary">Guardar Cliente</button>
@@ -54,15 +58,41 @@ const nuevoClienteComponent = {
         try {
             const formData = new FormData(event.target);
             const cliente = {
-                nombre: formData.get('nombre'),
                 rut: formData.get('rut'),
+                razonSocial: formData.get('razonSocial'),
                 direccion: formData.get('direccion') || '',
+                ciudad: formData.get('ciudad') || '',
+                contacto: formData.get('contacto') || '',
                 telefono: formData.get('telefono') || '',
                 email: formData.get('email') || '',
-                contacto: formData.get('contacto') || '',
                 fechaCreacion: new Date().toISOString(),
                 activo: true
             };
+            
+            // Validar RUT
+            const rutPattern = /^[0-9]{1,8}-[0-9kK]{1}$/;
+            if (!rutPattern.test(cliente.rut)) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'El RUT debe tener el formato correcto (ej: 12345678-9)',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+            
+            // Verificar si ya existe un cliente con ese RUT
+            const clientes = await FirebaseService.getClientes();
+            const clienteExistente = clientes.find(c => c.rut === cliente.rut);
+            if (clienteExistente) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Ya existe un cliente con ese RUT',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
             
             // Guardar cliente
             await FirebaseService.saveCliente(cliente);
@@ -70,7 +100,7 @@ const nuevoClienteComponent = {
             // Mostrar mensaje de éxito
             Swal.fire({
                 title: '¡Cliente creado!',
-                text: `El cliente ${cliente.nombre} ha sido creado con éxito.`,
+                text: `El cliente ${cliente.razonSocial} ha sido creado con éxito.`,
                 icon: 'success',
                 confirmButtonText: 'OK'
             }).then(() => {
@@ -89,10 +119,3 @@ const nuevoClienteComponent = {
         }
     }
 };
-
-// Registrar el componente
-if (typeof window.componentRegistry === 'undefined') {
-    window.componentRegistry = {};
-}
-
-window.componentRegistry['nuevo-cliente'] = nuevoClienteComponent;
