@@ -242,15 +242,29 @@ const repuestosComponent = {
                 // Procesar CSV
                 const lines = data.split('\n');
                 
+                // Procesar encabezados para encontrar índices de columnas
+                const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+                const codigoIndex = headers.findIndex(h => h.includes('código') || h.includes('codigo'));
+                const nombreIndex = headers.findIndex(h => h.includes('nombre'));
+                const precioIndex = headers.findIndex(h => h.includes('precio'));
+                
                 for (let i = 1; i < lines.length; i++) {
                     const line = lines[i].trim();
                     if (line) {
-                        const [codigo, nombre, precio] = line.split(',');
-                        parsedData.push({
-                            codigo: codigo.trim(),
-                            nombre: nombre.trim(),
-                            precio: parseFloat(precio)
-                        });
+                        const columns = line.split(',');
+                        
+                        // Validar que el registro tenga datos válidos
+                        const codigo = columns[codigoIndex]?.trim();
+                        const nombre = columns[nombreIndex]?.trim();
+                        const precio = parseFloat(columns[precioIndex]);
+                        
+                        if (codigo && nombre && !isNaN(precio)) {
+                            parsedData.push({
+                                codigo: codigo,
+                                nombre: nombre,
+                                precio: precio
+                            });
+                        }
                     }
                 }
             } else {
@@ -259,15 +273,32 @@ const repuestosComponent = {
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
                 const jsonData = XLSX.utils.sheet_to_json(sheet);
                 
-                parsedData = jsonData.map(row => ({
-                    codigo: row['Código'] || row['codigo'],
-                    nombre: row['Nombre'] || row['nombre'],
-                    precio: parseFloat(row['Precio'] || row['precio'])
-                }));
+                parsedData = jsonData.map(row => {
+                    // Intentar múltiples variaciones de nombres de columna
+                    const codigo = row['Código'] || row['codigo'] || row['CODIGO'] || '';
+                    const nombre = row['Nombre'] || row['nombre'] || row['NOMBRE'] || '';
+                    const precio = parseFloat(row['Precio'] || row['precio'] || row['PRECIO'] || 0);
+                    
+                    return {
+                        codigo: codigo.toString().trim(),
+                        nombre: nombre.toString().trim(),
+                        precio: isNaN(precio) ? 0 : precio
+                    };
+                }).filter(item => item.codigo && item.nombre && item.precio > 0);
+            }
+            
+            if (parsedData.length === 0) {
+                Swal.fire('Error', 'No se encontraron datos válidos en el archivo', 'error');
+                return;
             }
             
             this.datosTemporales = parsedData;
             this.mostrarPreview(parsedData);
+        };
+        
+        reader.onerror = (error) => {
+            console.error('Error leyendo archivo:', error);
+            Swal.fire('Error', 'Error al leer el archivo', 'error');
         };
         
         if (file.name.endsWith('.csv')) {
@@ -322,21 +353,33 @@ const repuestosComponent = {
             });
             
             const batch = firebase.firestore().batch();
+            let cargadosExitosamente = 0;
             
             this.datosTemporales.forEach(repuesto => {
-                const docRef = firebase.firestore().collection('repuestos').doc();
-                batch.set(docRef, {
-                    ...repuesto,
-                    fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                // Validar datos antes de agregar al batch
+                if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
+                    const docRef = firebase.firestore().collection('repuestos').doc();
+                    batch.set(docRef, {
+                        codigo: repuesto.codigo,
+                        nombre: repuesto.nombre,
+                        precio: repuesto.precio,
+                        fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    cargadosExitosamente++;
+                }
             });
+            
+            if (cargadosExitosamente === 0) {
+                Swal.fire('Error', 'No se encontraron datos válidos para cargar', 'error');
+                return;
+            }
             
             await batch.commit();
             
             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
             modal.hide();
             
-            Swal.fire('Éxito', `${this.datosTemporales.length} repuestos cargados correctamente`, 'success');
+            Swal.fire('Éxito', `${cargadosExitosamente} repuestos cargados correctamente`, 'success');
             this.cargarRepuestos();
             
             // Resetear
@@ -347,7 +390,7 @@ const repuestosComponent = {
             
         } catch (error) {
             console.error('Error en carga masiva:', error);
-            Swal.fire('Error', 'No se pudieron cargar los repuestos', 'error');
+            Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
         }
     },
 
