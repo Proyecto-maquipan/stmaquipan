@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('clientes', clientesComponent);
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
-    router.register('login', loginComponent); // ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ PRESENTE
+    router.register('login', loginComponent);
     // IMPORTANTE: Registrar la ruta de repuestos
     router.register('repuestos', repuestosComponent);
     
@@ -88,13 +88,17 @@ const loginComponent = {
         }, 0);
     },
     
-    handleSubmit(e) {
+    // Modificado para ser async
+    handleSubmit: async function(e) {
         e.preventDefault();
         
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         
-        if (auth.login(username, password)) {
+        // Modificado para esperar (await) la resolución del login
+        const loginSuccess = await auth.login(username, password);
+        
+        if (loginSuccess) {
             // Mostrar el layout principal
             document.querySelector('.user-section').style.display = 'block';
             document.querySelector('.sidebar').style.display = 'block';
