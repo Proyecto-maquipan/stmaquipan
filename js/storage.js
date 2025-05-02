@@ -1,7 +1,23 @@
-// Sistema de almacenamiento local
+// Sistema de almacenamiento híbrido (Local + Firebase)
+import FirebaseService from './firebase-config.js';
+
 const storage = {
+    useFirebase: true,
+    isOnline: navigator.onLine,
+    
     // Inicializar datos si no existen
-    init() {
+    async init() {
+        // Escuchar cambios de conexión
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            this.syncToFirebase();
+        });
+        
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
+        
+        // Inicializar localStorage si está vacío
         if (!localStorage.getItem('maquipan_data')) {
             const initialData = {
                 requerimientos: [],
@@ -24,10 +40,49 @@ const storage = {
             };
             this.saveAll(initialData);
         }
+        
+        // Inicializar Firebase si está disponible
+        if (this.useFirebase && this.isOnline) {
+            try {
+                await FirebaseService.initCounters();
+                console.log('Firebase inicializado correctamente');
+                
+                // Sincronizar datos existentes con Firebase
+                await this.syncToFirebase();
+            } catch (error) {
+                console.error('Error inicializando Firebase:', error);
+                this.useFirebase = false;
+            }
+        }
     },
 
     // Obtener todos los datos
-    getAll() {
+    async getAll() {
+        if (this.useFirebase && this.isOnline) {
+            try {
+                const [requerimientos, cotizaciones, clientes] = await Promise.all([
+                    FirebaseService.getRequerimientos(),
+                    FirebaseService.getCotizaciones(),
+                    FirebaseService.getClientes()
+                ]);
+                
+                const firebaseData = {
+                    requerimientos,
+                    cotizaciones,
+                    clientes,
+                    usuarios: this.getUsuarios(), // Mantener usuarios en local por seguridad
+                    config: this.getConfig()
+                };
+                
+                // Actualizar localStorage con datos de Firebase
+                localStorage.setItem('maquipan_data', JSON.stringify(firebaseData));
+                return firebaseData;
+            } catch (error) {
+                console.error('Error obteniendo datos de Firebase:', error);
+            }
+        }
+        
+        // Fallback a localStorage
         const data = localStorage.getItem('maquipan_data');
         return data ? JSON.parse(data) : null;
     },
@@ -37,94 +92,221 @@ const storage = {
         localStorage.setItem('maquipan_data', JSON.stringify(data));
     },
 
+    // Obtener configuración
+    getConfig() {
+        const data = localStorage.getItem('maquipan_data');
+        return data ? JSON.parse(data).config : null;
+    },
+
     // Requerimientos
-    getRequerimientos() {
-        const data = this.getAll();
+    async getRequerimientos() {
+        if (this.useFirebase && this.isOnline) {
+            try {
+                const requerimientos = await FirebaseService.getRequerimientos();
+                // Actualizar localStorage
+                const data = JSON.parse(localStorage.getItem('maquipan_data'));
+                data.requerimientos = requerimientos;
+                this.saveAll(data);
+                return requerimientos;
+            } catch (error) {
+                console.error('Error obteniendo requerimientos de Firebase:', error);
+            }
+        }
+        
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.requerimientos : [];
     },
 
-    saveRequerimiento(requerimiento) {
-        const data = this.getAll();
-        data.config.ultimoRequerimiento++;
-        requerimiento.id = 'REQ' + data.config.ultimoRequerimiento.toString().padStart(6, '0');
+    async saveRequerimiento(requerimiento) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
+        
+        if (!requerimiento.id) {
+            data.config.ultimoRequerimiento++;
+            requerimiento.id = 'REQ' + data.config.ultimoRequerimiento.toString().padStart(6, '0');
+        }
+        
         data.requerimientos.unshift(requerimiento);
         this.saveAll(data);
+        
+        // Sincronizar con Firebase si está disponible
+        if (this.useFirebase && this.isOnline) {
+            try {
+                await FirebaseService.saveRequerimiento(requerimiento);
+            } catch (error) {
+                console.error('Error guardando en Firebase:', error);
+            }
+        }
+        
         return requerimiento.id;
     },
 
-    updateRequerimiento(id, requerimiento) {
-        const data = this.getAll();
+    async updateRequerimiento(id, requerimiento) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         const index = data.requerimientos.findIndex(r => r.id === id);
+        
         if (index !== -1) {
             data.requerimientos[index] = { ...data.requerimientos[index], ...requerimiento };
             this.saveAll(data);
+            
+            // Sincronizar con Firebase
+            if (this.useFirebase && this.isOnline) {
+                try {
+                    await FirebaseService.updateRequerimiento(id, requerimiento);
+                } catch (error) {
+                    console.error('Error actualizando en Firebase:', error);
+                }
+            }
+            
             return true;
         }
         return false;
     },
 
     // Cotizaciones
-    getCotizaciones() {
-        const data = this.getAll();
+    async getCotizaciones() {
+        if (this.useFirebase && this.isOnline) {
+            try {
+                const cotizaciones = await FirebaseService.getCotizaciones();
+                // Actualizar localStorage
+                const data = JSON.parse(localStorage.getItem('maquipan_data'));
+                data.cotizaciones = cotizaciones;
+                this.saveAll(data);
+                return cotizaciones;
+            } catch (error) {
+                console.error('Error obteniendo cotizaciones de Firebase:', error);
+            }
+        }
+        
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.cotizaciones : [];
     },
 
-    saveCotizacion(cotizacion) {
-        const data = this.getAll();
-        data.config.ultimaCotizacion++;
-        cotizacion.numero = data.config.ultimaCotizacion.toString().padStart(6, '0');
+    async saveCotizacion(cotizacion) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
+        
+        if (!cotizacion.numero) {
+            data.config.ultimaCotizacion++;
+            cotizacion.numero = data.config.ultimaCotizacion.toString().padStart(6, '0');
+        }
+        
         data.cotizaciones.unshift(cotizacion);
         this.saveAll(data);
+        
+        // Sincronizar con Firebase
+        if (this.useFirebase && this.isOnline) {
+            try {
+                await FirebaseService.saveCotizacion(cotizacion);
+            } catch (error) {
+                console.error('Error guardando cotización en Firebase:', error);
+            }
+        }
+        
         return cotizacion.numero;
     },
 
-    updateCotizacion(numero, cotizacion) {
-        const data = this.getAll();
+    async updateCotizacion(numero, cotizacion) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         const index = data.cotizaciones.findIndex(c => c.numero === numero);
+        
         if (index !== -1) {
             data.cotizaciones[index] = { ...data.cotizaciones[index], ...cotizacion };
             this.saveAll(data);
+            
+            // Sincronizar con Firebase
+            if (this.useFirebase && this.isOnline) {
+                try {
+                    await FirebaseService.updateCotizacion(numero, cotizacion);
+                } catch (error) {
+                    console.error('Error actualizando cotización en Firebase:', error);
+                }
+            }
+            
             return true;
         }
         return false;
     },
 
     // Clientes
-    getClientes() {
-        const data = this.getAll();
+    async getClientes() {
+        if (this.useFirebase && this.isOnline) {
+            try {
+                const clientes = await FirebaseService.getClientes();
+                // Actualizar localStorage
+                const data = JSON.parse(localStorage.getItem('maquipan_data'));
+                data.clientes = clientes;
+                this.saveAll(data);
+                return clientes;
+            } catch (error) {
+                console.error('Error obteniendo clientes de Firebase:', error);
+            }
+        }
+        
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.clientes : [];
     },
 
-    saveCliente(cliente) {
-        const data = this.getAll();
-        data.config.ultimoCliente++;
-        cliente.id = data.config.ultimoCliente;
+    async saveCliente(cliente) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
+        
+        if (!cliente.id) {
+            data.config.ultimoCliente++;
+            cliente.id = data.config.ultimoCliente;
+        }
+        
         data.clientes.push(cliente);
         this.saveAll(data);
+        
+        // Sincronizar con Firebase
+        if (this.useFirebase && this.isOnline) {
+            try {
+                await FirebaseService.saveCliente(cliente);
+            } catch (error) {
+                console.error('Error guardando cliente en Firebase:', error);
+            }
+        }
+        
         return cliente.id;
     },
 
-    updateCliente(id, cliente) {
-        const data = this.getAll();
+    async updateCliente(id, cliente) {
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         const index = data.clientes.findIndex(c => c.id === id);
+        
         if (index !== -1) {
             data.clientes[index] = { ...data.clientes[index], ...cliente };
             this.saveAll(data);
+            
+            // Sincronizar con Firebase
+            if (this.useFirebase && this.isOnline) {
+                try {
+                    await FirebaseService.updateCliente(id, cliente);
+                } catch (error) {
+                    console.error('Error actualizando cliente en Firebase:', error);
+                }
+            }
+            
             return true;
         }
         return false;
     },
 
-    // Usuarios
+    // Usuarios (mantener solo en localStorage por seguridad)
     getUsuarios() {
-        const data = this.getAll();
+        const data = JSON.parse(localStorage.getItem('maquipan_data'));
         return data ? data.usuarios : [];
     },
 
     // Búsqueda
-    search(type, query) {
-        const data = this.getAll();
+    async search(type, query) {
         query = query.toLowerCase();
+        let data;
+        
+        // Si estamos online, buscar en Firebase
+        if (this.useFirebase && this.isOnline) {
+            data = await this.getAll();
+        } else {
+            data = JSON.parse(localStorage.getItem('maquipan_data'));
+        }
         
         switch(type) {
             case 'requerimiento':
@@ -149,16 +331,55 @@ const storage = {
     },
 
     // Estadísticas para el dashboard
-    getDashboardStats() {
-        const data = this.getAll();
+    async getDashboardStats() {
+        let data;
+        
+        if (this.useFirebase && this.isOnline) {
+            data = await this.getAll();
+        } else {
+            data = JSON.parse(localStorage.getItem('maquipan_data'));
+        }
+        
         return {
             requerimientosPendientes: data.requerimientos.filter(r => r.estado === 'Pendiente').length,
             cotizacionesActivas: data.cotizaciones.filter(c => c.estado === 'Activa').length,
             serviciosCompletados: data.requerimientos.filter(r => r.estado === 'Completado').length,
             clientesActivos: data.clientes.length
         };
+    },
+
+    // Sincronización manual con Firebase
+    async syncToFirebase() {
+        if (!this.useFirebase || !this.isOnline) return;
+        
+        try {
+            const data = JSON.parse(localStorage.getItem('maquipan_data'));
+            
+            // Sincronizar requerimientos
+            for (const req of data.requerimientos) {
+                await FirebaseService.saveRequerimiento(req);
+            }
+            
+            // Sincronizar cotizaciones
+            for (const cot of data.cotizaciones) {
+                await FirebaseService.saveCotizacion(cot);
+            }
+            
+            // Sincronizar clientes
+            for (const cli of data.clientes) {
+                await FirebaseService.saveCliente(cli);
+            }
+            
+            console.log('Datos sincronizados con Firebase');
+        } catch (error) {
+            console.error('Error en sincronización con Firebase:', error);
+        }
     }
 };
 
 // Inicializar storage cuando se carga el script
-storage.init();
+storage.init().catch(error => {
+    console.error('Error inicializando storage:', error);
+});
+
+export default storage;
