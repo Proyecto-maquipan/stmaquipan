@@ -4,13 +4,20 @@
 let db;
 let firebaseInitialized = false;
 
-try {
-    // Obtenemos la referencia a la instancia existente de Firestore
-    db = firebase.firestore();
-    firebaseInitialized = true;
-    console.log('Storage con Firebase inicializado correctamente');
-} catch (error) {
-    console.error('Error accediendo a Firebase en storage.js:', error);
+// Intentamos obtener la instancia de Firestore
+function initStorage() {
+    try {
+        db = firebase.firestore();
+        firebaseInitialized = true;
+        console.log('Storage con Firebase inicializado correctamente');
+        
+        // Ahora que Firebase está inicializado, podemos inicializar el storage
+        storage.init();
+    } catch (error) {
+        console.error('Error accediendo a Firebase en storage.js:', error);
+        // Intentar nuevamente en 1 segundo
+        setTimeout(initStorage, 1000);
+    }
 }
 
 // Sistema de almacenamiento con Firebase
@@ -35,6 +42,65 @@ const storage = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             console.log('Usuario administrador por defecto creado');
+        }
+    },
+
+    // Método de compatibilidad para app.js
+    async getAll() {
+        if (!firebaseInitialized) return {
+            requerimientos: [],
+            cotizaciones: [],
+            clientes: [],
+            usuarios: [{
+                id: 1,
+                username: 'admin',
+                password: 'admin123',
+                nombre: 'Cristian Andrés Pimentel Mancilla',
+                rol: 'admin'
+            }],
+            config: {
+                ultimoRequerimiento: 0,
+                ultimaCotizacion: 0,
+                ultimoCliente: 0
+            }
+        };
+        
+        try {
+            const requerimientos = await this.getRequerimientos();
+            const cotizaciones = await this.getCotizaciones();
+            const clientes = await this.getClientes();
+            const usuarios = await this.getUsuarios();
+            
+            return {
+                requerimientos,
+                cotizaciones, 
+                clientes,
+                usuarios,
+                config: {
+                    ultimoRequerimiento: 1000,
+                    ultimaCotizacion: 1000,
+                    ultimoCliente: 1000
+                }
+            };
+        } catch (error) {
+            console.error('Error en getAll:', error);
+            return {
+                requerimientos: [],
+                cotizaciones: [],
+                clientes: [],
+                usuarios: [{
+                    id: 1,
+                    username: 'admin',
+                    password: 'admin123',
+                    nombre: 'Cristian Andrés Pimentel Mancilla',
+                    rol: 'admin'
+                }],
+                config: {
+                    ultimoRequerimiento: 0,
+                    ultimaCotizacion: 0,
+                    ultimoCliente: 0
+                }
+            };
         }
     },
 
@@ -326,10 +392,8 @@ const storage = {
     }
 };
 
-// Inicializar storage cuando se carga el script
-storage.init();
-
 // Hacer storage disponible globalmente
 window.storage = storage;
 
-console.log('Storage con Firebase inicializado correctamente');
+// Inicializar storage cuando Firebase esté disponible
+setTimeout(initStorage, 500);
