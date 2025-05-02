@@ -1,7 +1,7 @@
 // Storage.js - Sistema de almacenamiento con Firebase
 
 // Usar la instancia de Firebase ya inicializada
-// Modificación: Usamos otro nombre para evitar conflictos
+// Cambiamos el nombre para evitar conflictos
 let storageDb;
 let firebaseInitialized = false;
 
