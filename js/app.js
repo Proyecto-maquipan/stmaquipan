@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-// Dentro de document.addEventListener('DOMContentLoaded', function() {
     // Registrar rutas
     router.register('dashboard', dashboardComponent);
     router.register('requerimientos', requerimientosComponent);
@@ -27,9 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
     router.register('login', loginComponent);
+    // IMPORTANTE: Registrar la ruta de repuestos
     router.register('repuestos', repuestosComponent);
-    // Agregar esta línea:
-    router.register('locales', localesComponent);
     
     // Cargar datos de ejemplo
     cargarDatosEjemplo();
@@ -40,8 +38,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Actualizar info de usuario
     auth.updateUserInfo();
 });
-
-// El resto del código se mantiene igual...
 
 // Componente Login (para completar el sistema)
 const loginComponent = {
@@ -154,3 +150,6 @@ function cargarDatosEjemplo() {
         console.error('Error cargando datos de ejemplo:', error);
     }
 }
+
+// NO cargar datos de ejemplo aquí, se hace dentro de DOMContentLoaded
+// cargarDatosEjemplo(); // ELIMINAR ESTA LÍNEA
