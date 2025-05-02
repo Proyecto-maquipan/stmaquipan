@@ -15,7 +15,24 @@ const router = {
             return;
         }
         
-        const component = this.routes[path];
+        // Comprobar si es una ruta con parámetros
+        let component;
+        let params = {};
+        
+        if (path.includes('/')) {
+            // Ejemplo: 'locales-cliente/123' -> ruta='locales-cliente', id='123'
+            const pathParts = path.split('/');
+            const basePath = pathParts[0];
+            
+            // Manejar 'locales-cliente/:id'
+            if (basePath === 'locales-cliente' && pathParts.length > 1) {
+                component = localesComponent;
+                params.clienteId = pathParts[1];
+            }
+        } else {
+            component = this.routes[path];
+        }
+        
         const app = document.getElementById('app');
         
         if (component) {
@@ -29,19 +46,18 @@ const router = {
                 });
                 
                 // Encontrar y activar el link correspondiente
-                const activeLink = document.querySelector(`[onclick*="'${path}'"]`);
+                const activeLink = document.querySelector(`[onclick*="'${path.split('/')[0]}'"]`);
                 if (activeLink) {
                     activeLink.classList.add('active');
                 }
                 
-                // Renderizar componente
-                // Verificar si el componente es asíncrono
+                // Renderizar componente con parámetros
                 if (component.render.constructor.name === 'AsyncFunction') {
                     // Componente asíncrono
-                    await component.render(app);
+                    await component.render(app, params);
                 } else {
                     // Componente síncrono
-                    component.render(app);
+                    component.render(app, params);
                 }
                 
                 // Actualizar URL (sin recargar la página)
