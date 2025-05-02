@@ -2,6 +2,12 @@
 const requerimientosComponent = {
     async render(container) {
         try {
+            // Mostrar indicador de carga
+            container.innerHTML = `
+                <h2>Requerimientos</h2>
+                <div class="loading-spinner">Cargando requerimientos...</div>
+            `;
+            
             // Esperar a que la promesa se resuelva
             const requerimientos = await storage.getRequerimientos();
             
@@ -27,12 +33,12 @@ const requerimientosComponent = {
                     <tbody>
                         ${requerimientos.map(req => `
                             <tr>
-                                <td>${req.id}</td>
-                                <td>${req.cliente}</td>
-                                <td>${req.contrato}</td>
-                                <td>${req.tecnico}</td>
-                                <td>${req.fecha}</td>
-                                <td>${req.estado}</td>
+                                <td>${req.id || ''}</td>
+                                <td>${req.cliente || ''}</td>
+                                <td>${req.contrato || ''}</td>
+                                <td>${req.tecnico || ''}</td>
+                                <td>${req.fecha || ''}</td>
+                                <td>${req.estado || ''}</td>
                                 <td>
                                     <button class="btn btn-primary" onclick="router.navigate('editar-requerimiento/${req.id}')">Editar</button>
                                     <button class="btn btn-success" onclick="generarPDF('${req.id}')">PDF</button>
@@ -46,9 +52,10 @@ const requerimientosComponent = {
             console.error('Error al renderizar requerimientos:', error);
             container.innerHTML = `
                 <div class="alert alert-danger">
-                    Error al cargar los requerimientos. Por favor, inténtelo de nuevo.
+                    <h3>Error al cargar los requerimientos</h3>
+                    <p>${error.message || 'Se produjo un error inesperado'}</p>
+                    <button class="btn btn-primary" onclick="router.navigate('requerimientos')">Reintentar</button>
                 </div>
-                <button class="btn btn-primary" onclick="router.navigate('requerimientos')">Reintentar</button>
             `;
         }
     }
@@ -58,6 +65,12 @@ const requerimientosComponent = {
 const nuevoRequerimientoComponent = {
     async render(container) {
         try {
+            // Mostrar indicador de carga
+            container.innerHTML = `
+                <h2>Nuevo Requerimiento</h2>
+                <div class="loading-spinner">Cargando datos...</div>
+            `;
+            
             // Esperar a que la promesa se resuelva
             const clientes = await storage.getClientes();
             
@@ -135,39 +148,51 @@ const nuevoRequerimientoComponent = {
             console.error('Error al cargar clientes:', error);
             container.innerHTML = `
                 <div class="alert alert-danger">
-                    Error al cargar los datos de clientes. Por favor, inténtelo de nuevo.
+                    <h3>Error al cargar los datos</h3>
+                    <p>${error.message || 'Se produjo un error inesperado'}</p>
+                    <button class="btn btn-primary" onclick="router.navigate('nuevo-requerimiento')">Reintentar</button>
                 </div>
-                <button class="btn btn-primary" onclick="router.navigate('nuevo-requerimiento')">Reintentar</button>
             `;
         }
     },
     
-    handleSubmit(e) {
+    async handleSubmit(e) {
         e.preventDefault();
         
-        const requerimiento = {
-            cliente: document.getElementById('requerimiento-cliente').value,
-            contrato: document.getElementById('requerimiento-contrato').value,
-            tecnico: document.getElementById('requerimiento-tecnico').value,
-            fecha: document.getElementById('requerimiento-fecha').value,
-            descripcion: document.getElementById('requerimiento-descripcion').value,
-            equipo: {
-                marca: document.getElementById('equipo-marca').value,
-                modelo: document.getElementById('equipo-modelo').value,
-                serie: document.getElementById('equipo-serie').value
-            },
-            estado: 'Pendiente',
-            fechaCreacion: new Date().toISOString()
-        };
-        
-        storage.saveRequerimiento(requerimiento)
-            .then(id => {
-                alert(`Requerimiento ${id} creado exitosamente`);
-                router.navigate('requerimientos');
-            })
-            .catch(error => {
-                console.error('Error al guardar requerimiento:', error);
-                alert('Error al guardar el requerimiento. Por favor, inténtelo de nuevo.');
-            });
+        try {
+            const requerimiento = {
+                cliente: document.getElementById('requerimiento-cliente').value,
+                contrato: document.getElementById('requerimiento-contrato').value,
+                tecnico: document.getElementById('requerimiento-tecnico').value,
+                fecha: document.getElementById('requerimiento-fecha').value,
+                descripcion: document.getElementById('requerimiento-descripcion').value,
+                equipo: {
+                    marca: document.getElementById('equipo-marca').value,
+                    modelo: document.getElementById('equipo-modelo').value,
+                    serie: document.getElementById('equipo-serie').value
+                },
+                estado: 'Pendiente',
+                fechaCreacion: new Date().toISOString()
+            };
+            
+            // Mostrar indicador de carga
+            document.querySelector('.form-actions').innerHTML = `
+                <div class="loading-spinner">Guardando requerimiento...</div>
+            `;
+            
+            const id = await storage.saveRequerimiento(requerimiento);
+            
+            alert(`Requerimiento ${id} creado exitosamente`);
+            router.navigate('requerimientos');
+        } catch (error) {
+            console.error('Error al guardar requerimiento:', error);
+            alert(`Error al guardar el requerimiento: ${error.message || 'Se produjo un error inesperado'}`);
+            
+            // Restaurar botones
+            document.querySelector('.form-actions').innerHTML = `
+                <button type="submit" class="btn btn-primary">Guardar Requerimiento</button>
+                <button type="button" class="btn btn-secondary" onclick="router.navigate('requerimientos')">Cancelar</button>
+            `;
+        }
     }
 };
