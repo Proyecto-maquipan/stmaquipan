@@ -336,5 +336,8 @@ const FirebaseService = {
     }
 };
 
-// Exportar el servicio
-export default FirebaseService;
+// Hacer FirebaseService disponible globalmente
+window.FirebaseService = FirebaseService;
+window.COLLECTIONS = COLLECTIONS;
+
+console.log('Servicio FirebaseService inicializado correctamente');
