@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+// Dentro de document.addEventListener('DOMContentLoaded', function() {
     // Registrar rutas
     router.register('dashboard', dashboardComponent);
     router.register('requerimientos', requerimientosComponent);
@@ -26,9 +27,8 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
     router.register('login', loginComponent);
-    // IMPORTANTE: Registrar la ruta de repuestos
     router.register('repuestos', repuestosComponent);
-    // IMPORTANTE: Registrar la ruta de locales
+    // Agregar esta línea:
     router.register('locales', localesComponent);
     
     // Cargar datos de ejemplo
