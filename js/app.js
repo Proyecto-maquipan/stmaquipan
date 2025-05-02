@@ -95,7 +95,8 @@ const loginComponent = {
 };
 
 // Función para generar PDF de requerimiento (ejemplo básico)
-function generarPDF(reqId) {
+// Agregar async a la función para poder usar await
+async function generarPDF(reqId) {
     const requerimientos = await storage.getRequerimientos();
     const requerimiento = requerimientos.find(r => r.id === reqId);
     if (requerimiento) {
@@ -106,7 +107,8 @@ function generarPDF(reqId) {
 }
 
 // Función para generar PDF de cotización (ejemplo básico)
-function generarPDFCotizacion(numero) {
+// Agregar async a la función para poder usar await
+async function generarPDFCotizacion(numero) {
     const cotizaciones = await storage.getCotizaciones();
     const cotizacion = cotizaciones.find(c => c.numero === numero);
     if (cotizacion) {
