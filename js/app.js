@@ -1,5 +1,7 @@
 // Archivo principal de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded: Iniciando aplicación');
+    
     // Verificar que todos los objetos necesarios estén disponibles
     if (typeof storage === 'undefined') {
         console.error('Storage no está definido');
@@ -16,7 +18,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    // Verificar componentes
+    if (typeof dashboardComponent === 'undefined') {
+        console.error('Componente dashboard no está definido');
+    }
+    if (typeof loginComponent === 'undefined') {
+        console.error('Componente login no está definido');
+    }
+    
     // Registrar rutas
+    console.log('Registrando rutas...');
     router.register('dashboard', dashboardComponent);
     router.register('requerimientos', requerimientosComponent);
     router.register('nuevo-requerimiento', nuevoRequerimientoComponent);
@@ -42,6 +53,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // Componente Login (para completar el sistema)
 const loginComponent = {
     render(container) {
+        console.log('Renderizando componente login');
+        
         // Ocultar el layout principal si no está autenticado
         document.querySelector('.user-section').style.display = 'none';
         document.querySelector('.sidebar').style.display = 'none';
