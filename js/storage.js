@@ -3,19 +3,48 @@
 // Usar la instancia de Firebase ya inicializada
 // En lugar de declarar nuevamente 'db', usamos firebase.firestore() directamente
 let firebaseInitialized = false;
+let initAttempts = 0;
+const MAX_INIT_ATTEMPTS = 5;
 
 // Intentamos obtener la instancia de Firestore
 function initStorage() {
     try {
-        firebaseInitialized = true;
-        console.log('Storage con Firebase inicializado correctamente');
-        
-        // Ahora que Firebase está inicializado, podemos inicializar el storage
-        storage.init();
+        // Verificar que Firebase y Firestore estén disponibles
+        if (typeof firebase !== 'undefined' && 
+            typeof firebase.firestore === 'function' &&
+            firebase.apps && firebase.apps.length > 0) {
+            
+            firebaseInitialized = true;
+            console.log('Storage con Firebase inicializado correctamente');
+            
+            // Ahora que Firebase está inicializado, podemos inicializar el storage
+            storage.init();
+        } else {
+            initAttempts++;
+            if (initAttempts <= MAX_INIT_ATTEMPTS) {
+                console.warn(`Intento ${initAttempts}/${MAX_INIT_ATTEMPTS}: Firebase no está completamente disponible, reintentando...`);
+                setTimeout(initStorage, 1000);
+            } else {
+                console.error('No se pudo inicializar Firebase después de múltiples intentos. Ejecutando en modo offline.');
+                // Mostrar mensaje al usuario
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Error de conexión',
+                        text: 'No se pudo conectar con la base de datos. Algunas funciones estarán limitadas.',
+                        icon: 'warning',
+                        confirmButtonText: 'Entendido'
+                    });
+                }
+            }
+        }
     } catch (error) {
         console.error('Error accediendo a Firebase en storage.js:', error);
-        // Intentar nuevamente en 1 segundo
-        setTimeout(initStorage, 1000);
+        initAttempts++;
+        if (initAttempts <= MAX_INIT_ATTEMPTS) {
+            setTimeout(initStorage, 1000);
+        } else {
+            console.error('No se pudo inicializar Firebase después de múltiples intentos debido a errores.');
+        }
     }
 }
 
@@ -28,19 +57,23 @@ const storage = {
             return;
         }
         
-        // Verificar si existen usuarios administradores
-        const usuariosSnapshot = await firebase.firestore().collection('usuarios').where('rol', '==', 'admin').get();
-        
-        // Si no hay usuarios, crear uno por defecto
-        if (usuariosSnapshot.empty) {
-            await firebase.firestore().collection('usuarios').add({
-                username: 'admin',
-                password: 'admin123',
-                nombre: 'Cristian Andrés Pimentel Mancilla',
-                rol: 'admin',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            console.log('Usuario administrador por defecto creado');
+        try {
+            // Verificar si existen usuarios administradores
+            const usuariosSnapshot = await firebase.firestore().collection('usuarios').where('rol', '==', 'admin').get();
+            
+            // Si no hay usuarios, crear uno por defecto
+            if (usuariosSnapshot.empty) {
+                await firebase.firestore().collection('usuarios').add({
+                    username: 'admin',
+                    password: 'admin123',
+                    nombre: 'Cristian Andrés Pimentel Mancilla',
+                    rol: 'admin',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('Usuario administrador por defecto creado');
+            }
+        } catch (error) {
+            console.error('Error en storage.init:', error);
         }
     },
 
