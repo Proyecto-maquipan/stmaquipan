@@ -88,5 +88,134 @@
 
     <!-- Opcional: Agregar un favicon para evitar errores 404 -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
+
+    <!-- Sistema de recuperación de UI -->
+    <div id="emergencyReset" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999; display: none;">
+        <button onclick="window.emergencyResetUI()" class="btn btn-danger">
+            <i class="fas fa-exclamation-triangle"></i> Reiniciar UI
+        </button>
+    </div>
+
+    <!-- Script para recuperar UI bloqueada -->
+    <script>
+    // Sistema de recuperación de UI bloqueada
+    (function() {
+        // Funciones globales para resetear la UI
+        window.emergencyResetUI = function() {
+            console.log('Ejecutando recuperación de emergencia de la UI');
+            
+            // Cerrar todos los modales
+            try {
+                var modals = document.querySelectorAll('.modal');
+                modals.forEach(function(modal) {
+                    try {
+                        if (typeof bootstrap !== 'undefined') {
+                            var modalInstance = bootstrap.Modal.getInstance(modal);
+                            if (modalInstance) {
+                                modalInstance.hide();
+                            }
+                        }
+                        // Fallback si bootstrap no está disponible
+                        modal.style.display = 'none';
+                        modal.classList.remove('show');
+                        modal.setAttribute('aria-hidden', 'true');
+                        modal.removeAttribute('aria-modal');
+                    } catch(e) {
+                        console.error('Error al cerrar modal:', e);
+                    }
+                });
+            
+                // Remover backdrops
+                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            } catch(e) {
+                console.error('Error al limpiar modales:', e);
+            }
+            
+            // Ocultar botón de emergencia
+            document.getElementById('emergencyReset').style.display = 'none';
+            
+            // Recargar componente actual o ir al dashboard
+            if (typeof router !== 'undefined') {
+                try {
+                    const currentRoute = window.location.hash.slice(1) || 'dashboard';
+                    router.navigate(currentRoute);
+                } catch(e) {
+                    console.error('Error al navegar:', e);
+                    // Si falla la navegación, recargar la página como último recurso
+                    if (confirm('¿Deseas recargar la página completa?')) {
+                        window.location.reload();
+                    }
+                }
+            }
+        };
+        
+        // Detectar posibles bloqueos de UI
+        let uiBlockDetector = {
+            lastActivity: Date.now(),
+            checkInterval: null,
+            
+            init: function() {
+                // Registrar interacciones del usuario
+                document.addEventListener('click', () => this.resetTimer());
+                document.addEventListener('mousemove', () => this.resetTimer());
+                document.addEventListener('keypress', () => this.resetTimer());
+                
+                // Detectar cuando se abre un modal
+                document.addEventListener('shown.bs.modal', () => {
+                    this.resetTimer();
+                    this.startMonitoring();
+                });
+                
+                // Detectar cuando se cierra un modal normalmente
+                document.addEventListener('hidden.bs.modal', () => {
+                    this.stopMonitoring();
+                });
+                
+                // Mostrar botón de emergencia con Ctrl+Alt+R
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.altKey && e.key === 'r') {
+                        document.getElementById('emergencyReset').style.display = 'block';
+                    }
+                });
+            },
+            
+            resetTimer: function() {
+                this.lastActivity = Date.now();
+            },
+            
+            startMonitoring: function() {
+                if (this.checkInterval) {
+                    clearInterval(this.checkInterval);
+                }
+                
+                this.checkInterval = setInterval(() => {
+                    // Si hay un modal visible y no ha habido actividad en 15 segundos
+                    const modalVisible = document.querySelector('.modal.show');
+                    if (modalVisible && (Date.now() - this.lastActivity > 15000)) {
+                        console.warn('Posible UI bloqueada detectada - Mostrando botón de emergencia');
+                        document.getElementById('emergencyReset').style.display = 'block';
+                    }
+                }, 5000); // Revisar cada 5 segundos
+            },
+            
+            stopMonitoring: function() {
+                if (this.checkInterval) {
+                    clearInterval(this.checkInterval);
+                    this.checkInterval = null;
+                }
+            }
+        };
+        
+        // Inicializar detector de bloqueos cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => uiBlockDetector.init());
+        } else {
+            uiBlockDetector.init();
+        }
+    })();
+    </script>
 </body>
 </html>
