@@ -225,92 +225,21 @@ const repuestosComponent = {
     },
 
     // Función auxiliar para mostrar modales de forma segura
-    mostrarModal(modalId) {
-        try {
-            // Limpiar cualquier modal previo para evitar conflictos
-            this.limpiarUIBloqueada();
-            
-            const modalElement = document.getElementById(modalId);
-            if (!modalElement) {
-                console.error(`Modal ${modalId} no encontrado`);
-                return null;
-            }
-            
-            // Usar Bootstrap 5 para mostrar el modal
-            const modal = new bootstrap.Modal(modalElement, {
-                backdrop: 'static',  // Evita que se cierre al hacer clic fuera
-                keyboard: true       // Permite cerrar con ESC
-            });
-            
-            // Agregar manejador de errores al modal
-            modalElement.addEventListener('shown.bs.modal', () => {
-                console.log(`Modal ${modalId} mostrado correctamente`);
-            });
-            
-            modalElement.addEventListener('hide.bs.modal', () => {
-                // Limpiar cualquier estado al cerrar
-                console.log(`Modal ${modalId} cerrándose`);
-            });
-            
-            // Mostrar el modal
-            modal.show();
-            
-            return modal;
-        } catch (error) {
-            console.error(`Error al mostrar modal ${modalId}:`, error);
-            this.limpiarUIBloqueada();
-            return null;
-        }
-    },
+    // Función auxiliar para mostrar modales de forma segura
+mostrarModal(modalId) {
+    return window.mostrarModalSeguro(modalId);
+},
 
-    // Función auxiliar para cerrar modales de forma segura
-    cerrarModal(modalId) {
-        try {
-            const modalElement = document.getElementById(modalId);
-            if (!modalElement) {
-                console.error(`Modal ${modalId} no encontrado`);
-                return false;
-            }
-            
-            const modal = bootstrap.Modal.getInstance(modalElement);
-            if (modal) {
-                modal.hide();
-            } else {
-                // Fallback si no se puede obtener la instancia
-                modalElement.style.display = 'none';
-                modalElement.classList.remove('show');
-                this.limpiarUIBloqueada();
-            }
-            
-            return true;
-        } catch (error) {
-            console.error(`Error al cerrar modal ${modalId}:`, error);
-            this.limpiarUIBloqueada();
-            return false;
-        }
-    },
+// Función auxiliar para cerrar modales de forma segura
+cerrarModal(modalId) {
+    return window.cerrarModalSeguro(modalId);
+},
 
-    // Función para limpiar UI bloqueada
-    limpiarUIBloqueada() {
-        console.log('Limpiando UI bloqueada');
-        
-        // Cerrar todos los modales
-        document.querySelectorAll('.modal').forEach(modal => {
-            try {
-                modal.style.display = 'none';
-                modal.classList.remove('show');
-                modal.setAttribute('aria-hidden', 'true');
-                modal.removeAttribute('aria-modal');
-            } catch (e) {
-                console.error('Error al cerrar modal:', e);
-            }
-        });
-        
-        // Remover backdrops
-        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-    },
+// Función para limpiar UI bloqueada
+limpiarUIBloqueada() {
+    // Usar la función global
+    window.limpiarUIBloqueada();
+},
     
     // Funciones para abrir los modales de forma segura
     abrirModalAgregarRepuesto() {
@@ -685,107 +614,110 @@ const repuestosComponent = {
     },
 
     async guardarRepuesto() {
-        try {
-            const codigo = document.getElementById('codigo')?.value;
-            const nombre = document.getElementById('nombre')?.value;
-            const precioElement = document.getElementById('precio');
-            const precio = precioElement ? parseFloat(precioElement.value) : 0;
-            
-            if (!codigo || !nombre || isNaN(precio)) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Error', 'Todos los campos son requeridos y el precio debe ser un número', 'error');
-                } else {
-                    alert('Todos los campos son requeridos y el precio debe ser un número');
-                }
-                return;
-            }
-            
-            // Verificar que firebase esté inicializado
-            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
-                throw new Error('Firebase no está disponible');
-            }
-            
-            // Mostrar indicador de carga
-            let loadingSwal;
+    try {
+        const codigo = document.getElementById('codigo')?.value;
+        const nombre = document.getElementById('nombre')?.value;
+        const precioElement = document.getElementById('precio');
+        const precio = precioElement ? parseFloat(precioElement.value) : 0;
+        
+        if (!codigo || !nombre || isNaN(precio)) {
             if (typeof Swal !== 'undefined') {
-                loadingSwal = Swal.fire({
-                    title: 'Guardando...',
-                    text: 'Espere por favor',
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
-            }
-            
-            // Agregar tiempo de espera máximo
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
-            );
-            
-            const savePromise = firebase.firestore().collection('repuestos').add({
-                codigo,
-                nombre,
-                precio,
-                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            // Usar Promise.race para limitar el tiempo de espera
-            await Promise.race([savePromise, timeoutPromise]);
-            
-            // Cerrar modal de forma segura
-            this.cerrarModal('addRepuestoModal');
-            
-            // Limpiar formulario
-            const form = document.getElementById('addRepuestoForm');
-            if (form) {
-                form.reset();
-            }
-            
-            if (loadingSwal) {
-                loadingSwal.close();
-            }
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: 'Éxito',
-                    text: 'Repuesto agregado correctamente',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                Swal.fire('Error', 'Todos los campos son requeridos y el precio debe ser un número', 'error');
             } else {
-                alert('Repuesto agregado correctamente');
+                alert('Todos los campos son requeridos y el precio debe ser un número');
             }
-            
-            // Actualizar contador y recargar
-            try {
-                await this.contarTotalRepuestos();
-                this.currentPage = 1;
-                this.lastVisible = null;
-                await this.cargarRepuestosPaginados();
-            } catch (refreshError) {
-                console.error('Error al actualizar lista:', refreshError);
-            }
-            
-        } catch (error) {
-            console.error('Error al guardar repuesto:', error);
-            
-            // Limpiar UI en caso de error
-            this.limpiarUIBloqueada();
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'No se pudo guardar el repuesto. ' + (error.message || ''),
-                    icon: 'error',
-                    confirmButtonText: 'Aceptar'
-                });
-            } else {
-                alert('Error al guardar el repuesto: ' + (error.message || ''));
-            }
+            return;
         }
-    },
+        
+        // Verificar que firebase esté inicializado
+        if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+            throw new Error('Firebase no está disponible');
+        }
+        
+        // Mostrar indicador de carga
+        let loadingSwal;
+        if (typeof Swal !== 'undefined') {
+            loadingSwal = Swal.fire({
+                title: 'Guardando...',
+                text: 'Espere por favor',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        }
+        
+        // Agregar tiempo de espera máximo
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+        );
+        
+        const savePromise = firebase.firestore().collection('repuestos').add({
+            codigo,
+            nombre,
+            precio,
+            fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Usar Promise.race para limitar el tiempo de espera
+        await Promise.race([savePromise, timeoutPromise]);
+        
+        // Cerrar modal de forma segura
+        this.cerrarModal('addRepuestoModal');
+        
+        // Asegurarse de limpiar la UI en caso de problemas
+        window.limpiarUIBloqueada();
+        
+        // Limpiar formulario
+        const form = document.getElementById('addRepuestoForm');
+        if (form) {
+            form.reset();
+        }
+        
+        if (loadingSwal) {
+            loadingSwal.close();
+        }
+        
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Éxito',
+                text: 'Repuesto agregado correctamente',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            alert('Repuesto agregado correctamente');
+        }
+        
+        // Actualizar contador y recargar
+        try {
+            await this.contarTotalRepuestos();
+            this.currentPage = 1;
+            this.lastVisible = null;
+            await this.cargarRepuestosPaginados();
+        } catch (refreshError) {
+            console.error('Error al actualizar lista:', refreshError);
+        }
+        
+    } catch (error) {
+        console.error('Error al guardar repuesto:', error);
+        
+        // Limpiar UI en caso de error
+        window.limpiarUIBloqueada();
+        
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo guardar el repuesto. ' + (error.message || ''),
+                icon: 'error',
+                confirmButtonText: 'Aceptar'
+            });
+        } else {
+            alert('Error al guardar el repuesto: ' + (error.message || ''));
+        }
+    }
+},
 
     procesarArchivo(input) {
         if (!input || !input.files || !input.files[0]) return;
@@ -926,156 +858,159 @@ const repuestosComponent = {
     },
 
     async cargarRepuestosMasivo() {
-        if (!this.datosTemporales || this.datosTemporales.length === 0) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire('Error', 'No hay datos para cargar', 'error');
-            } else {
-                alert('No hay datos para cargar');
-            }
-            return;
+    if (!this.datosTemporales || this.datosTemporales.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', 'No hay datos para cargar', 'error');
+        } else {
+            alert('No hay datos para cargar');
+        }
+        return;
+    }
+    
+    try {
+        // Verificar que firebase esté inicializado
+        if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+            throw new Error('Firebase no está disponible');
         }
         
-        try {
-            // Verificar que firebase esté inicializado
-            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
-                throw new Error('Firebase no está disponible');
-            }
+        const totalRegistros = this.datosTemporales.length;
+        const batchSize = 500; // Procesar en lotes de 500
+        let procesados = 0;
+        let actualizados = 0;
+        let nuevos = 0;
+        
+        // Mostrar indicador de progreso
+        let progressSwal;
+        if (typeof Swal !== 'undefined') {
+            progressSwal = Swal.fire({
+                title: 'Analizando repuestos...',
+                html: `Preparando datos...`,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        }
+        
+        // Primero, obtener todos los códigos de repuestos existentes
+        const snapshot = await firebase.firestore().collection('repuestos').get();
+        const repuestosExistentes = {};
+        snapshot.forEach(doc => {
+            const repuesto = doc.data();
+            repuestosExistentes[repuesto.codigo] = {
+                id: doc.id,
+                ...repuesto
+            };
+        });
+        
+        if (progressSwal) {
+            Swal.update({
+                title: 'Cargando repuestos...',
+                html: `Procesando: <b>0</b> de ${totalRegistros}`
+            });
+        }
+        
+        // Procesar en lotes para evitar sobrecargar Firebase
+        for (let i = 0; i < totalRegistros; i += batchSize) {
+            const batch = firebase.firestore().batch();
+            const lote = this.datosTemporales.slice(i, i + batchSize);
             
-            const totalRegistros = this.datosTemporales.length;
-            const batchSize = 500; // Procesar en lotes de 500
-            let procesados = 0;
-            let actualizados = 0;
-            let nuevos = 0;
-            
-            // Mostrar indicador de progreso
-            let progressSwal;
-            if (typeof Swal !== 'undefined') {
-                progressSwal = Swal.fire({
-                    title: 'Analizando repuestos...',
-                    html: `Preparando datos...`,
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
+            lote.forEach(repuesto => {
+                if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
+                    // Verificar si el repuesto ya existe
+                    if (repuestosExistentes[repuesto.codigo]) {
+                        // Actualizar repuesto existente
+                        const docRef = firebase.firestore().collection('repuestos').doc(repuestosExistentes[repuesto.codigo].id);
+                        batch.update(docRef, {
+                            nombre: repuesto.nombre,
+                            precio: repuesto.precio,
+                            fechaModificacion: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        actualizados++;
+                    } else {
+                        // Crear nuevo repuesto
+                        const docRef = firebase.firestore().collection('repuestos').doc();
+                        batch.set(docRef, {
+                            codigo: repuesto.codigo,
+                            nombre: repuesto.nombre,
+                            precio: repuesto.precio,
+                            fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        nuevos++;
                     }
-                });
-            }
-            
-            // Primero, obtener todos los códigos de repuestos existentes
-            const snapshot = await firebase.firestore().collection('repuestos').get();
-            const repuestosExistentes = {};
-            snapshot.forEach(doc => {
-                const repuesto = doc.data();
-                repuestosExistentes[repuesto.codigo] = {
-                    id: doc.id,
-                    ...repuesto
-                };
+                }
             });
             
+            // Añadir un timeout para evitar bloqueos
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 15000)
+            );
+            
+            const batchPromise = batch.commit();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            await Promise.race([batchPromise, timeoutPromise]);
+            
+            procesados += lote.length;
+            
+            // Actualizar progreso
             if (progressSwal) {
                 Swal.update({
-                    title: 'Cargando repuestos...',
-                    html: `Procesando: <b>0</b> de ${totalRegistros}`
+                    html: `Procesando: <b>${procesados}</b> de ${totalRegistros}`
                 });
-            }
-            
-            // Procesar en lotes para evitar sobrecargar Firebase
-            for (let i = 0; i < totalRegistros; i += batchSize) {
-                const batch = firebase.firestore().batch();
-                const lote = this.datosTemporales.slice(i, i + batchSize);
-                
-                lote.forEach(repuesto => {
-                    if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
-                        // Verificar si el repuesto ya existe
-                        if (repuestosExistentes[repuesto.codigo]) {
-                            // Actualizar repuesto existente
-                            const docRef = firebase.firestore().collection('repuestos').doc(repuestosExistentes[repuesto.codigo].id);
-                            batch.update(docRef, {
-                                nombre: repuesto.nombre,
-                                precio: repuesto.precio,
-                                fechaModificacion: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                            actualizados++;
-                        } else {
-                            // Crear nuevo repuesto
-                            const docRef = firebase.firestore().collection('repuestos').doc();
-                            batch.set(docRef, {
-                                codigo: repuesto.codigo,
-                                nombre: repuesto.nombre,
-                                precio: repuesto.precio,
-                                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                            nuevos++;
-                        }
-                    }
-                });
-                
-                // Añadir un timeout para evitar bloqueos
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Tiempo de espera agotado')), 15000)
-                );
-                
-                const batchPromise = batch.commit();
-                
-                // Usar Promise.race para limitar el tiempo de espera
-                await Promise.race([batchPromise, timeoutPromise]);
-                
-                procesados += lote.length;
-                
-                // Actualizar progreso
-                if (progressSwal) {
-                    Swal.update({
-                        html: `Procesando: <b>${procesados}</b> de ${totalRegistros}`
-                    });
-                }
-            }
-            
-            // Cerrar modal de forma segura
-            this.cerrarModal('uploadModal');
-            
-            if (progressSwal) {
-                progressSwal.close();
-            }
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire('Éxito', `Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`, 'success');
-            } else {
-                alert(`Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`);
-            }
-            
-            // Actualizar vista
-            await this.contarTotalRepuestos();
-            this.currentPage = 1;
-            this.lastVisible = null;
-            await this.cargarRepuestosPaginados();
-            
-            // Resetear
-            this.datosTemporales = [];
-            const fileInput = document.getElementById('fileInput');
-            if (fileInput) {
-                fileInput.value = '';
-            }
-            const previewArea = document.getElementById('previewArea');
-            if (previewArea) {
-                previewArea.style.display = 'none';
-            }
-            const uploadBtn = document.getElementById('uploadBtn');
-            if (uploadBtn) {
-                uploadBtn.disabled = true;
-            }
-            
-        } catch (error) {
-            console.error('Error en carga masiva:', error);
-            
-            // Limpiar UI en caso de error
-            this.limpiarUIBloqueada();
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
-            } else {
-                alert(`Error en carga masiva: ${error.message}`);
             }
         }
-    },
+        
+        // Cerrar modal de forma segura
+        this.cerrarModal('uploadModal');
+        
+        // Asegurarse de limpiar la UI
+        window.limpiarUIBloqueada();
+        
+        if (progressSwal) {
+            progressSwal.close();
+        }
+        
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Éxito', `Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`, 'success');
+        } else {
+            alert(`Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`);
+        }
+        
+        // Actualizar vista
+        await this.contarTotalRepuestos();
+        this.currentPage = 1;
+        this.lastVisible = null;
+        await this.cargarRepuestosPaginados();
+        
+        // Resetear
+        this.datosTemporales = [];
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        const previewArea = document.getElementById('previewArea');
+        if (previewArea) {
+            previewArea.style.display = 'none';
+        }
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) {
+            uploadBtn.disabled = true;
+        }
+        
+    } catch (error) {
+        console.error('Error en carga masiva:', error);
+        
+        // Limpiar UI en caso de error
+        window.limpiarUIBloqueada();
+        
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
+        } else {
+            alert(`Error en carga masiva: ${error.message}`);
+        }
+    }
+},
 
     async eliminarRepuesto(id) {
         if (!id) return;
