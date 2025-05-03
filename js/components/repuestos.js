@@ -612,14 +612,32 @@ const repuestosComponent = {
             const totalRegistros = this.datosTemporales.length;
             const batchSize = 500; // Procesar en lotes de 500
             let procesados = 0;
+            let actualizados = 0;
+            let nuevos = 0;
             
             Swal.fire({
-                title: 'Cargando repuestos...',
-                html: `Procesando: <b>0</b> de ${totalRegistros}`,
+                title: 'Analizando repuestos...',
+                html: `Preparando datos...`,
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
                 }
+            });
+            
+            // Primero, obtener todos los códigos de repuestos existentes
+            const snapshot = await firebase.firestore().collection('repuestos').get();
+            const repuestosExistentes = {};
+            snapshot.forEach(doc => {
+                const repuesto = doc.data();
+                repuestosExistentes[repuesto.codigo] = {
+                    id: doc.id,
+                    ...repuesto
+                };
+            });
+            
+            Swal.update({
+                title: 'Cargando repuestos...',
+                html: `Procesando: <b>0</b> de ${totalRegistros}`
             });
             
             // Procesar en lotes para evitar sobrecargar Firebase
@@ -629,13 +647,27 @@ const repuestosComponent = {
                 
                 lote.forEach(repuesto => {
                     if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
-                        const docRef = firebase.firestore().collection('repuestos').doc();
-                        batch.set(docRef, {
-                            codigo: repuesto.codigo,
-                            nombre: repuesto.nombre,
-                            precio: repuesto.precio,
-                            fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-                        });
+                        // Verificar si el repuesto ya existe
+                        if (repuestosExistentes[repuesto.codigo]) {
+                            // Actualizar repuesto existente
+                            const docRef = firebase.firestore().collection('repuestos').doc(repuestosExistentes[repuesto.codigo].id);
+                            batch.update(docRef, {
+                                nombre: repuesto.nombre,
+                                precio: repuesto.precio,
+                                fechaModificacion: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            actualizados++;
+                        } else {
+                            // Crear nuevo repuesto
+                            const docRef = firebase.firestore().collection('repuestos').doc();
+                            batch.set(docRef, {
+                                codigo: repuesto.codigo,
+                                nombre: repuesto.nombre,
+                                precio: repuesto.precio,
+                                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            nuevos++;
+                        }
                     }
                 });
                 
@@ -651,7 +683,7 @@ const repuestosComponent = {
             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
             modal.hide();
             
-            Swal.fire('Éxito', `${procesados} repuestos cargados correctamente`, 'success');
+            Swal.fire('Éxito', `Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`, 'success');
             
             // Actualizar vista
             await this.contarTotalRepuestos();
@@ -672,32 +704,31 @@ const repuestosComponent = {
     },
 
     async eliminarRepuesto(id) {
-        const result = await Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Esta acción no se puede deshacer",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        });
-        
-        if (result.isConfirmed) {
-            try {
-                await firebase.firestore().collection('repuestos').doc(id).delete();
-                Swal.fire('Eliminado', 'El repuesto ha sido eliminado', 'success');
-                
-                // Actualizar vista
-                await this.contarTotalRepuestos();
-                this.cargarRepuestosPaginados(this.currentPage);
-            } catch (error) {
-                console.error('Error al eliminar:', error);
-                Swal.fire('Error', 'No se pudo eliminar el repuesto', 'error');
-            }
+    const result = await Swal.fire({
+        title: '¿Estás seguro?',
+        text: "Esta acción no se puede deshacer",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (result.isConfirmed) {
+        try {
+            await firebase.firestore().collection('repuestos').doc(id).delete();
+            Swal.fire('Eliminado', 'El repuesto ha sido eliminado', 'success');
+            
+            // Actualizar vista
+            await this.contarTotalRepuestos();
+            this.cargarRepuestosPaginados(this.currentPage);
+        } catch (error) {
+            console.error('Error al eliminar:', error);
+            Swal.fire('Error', 'No se pudo eliminar el repuesto', 'error');
         }
-    },
-
+    }
+}
     async editarRepuesto(id) {
         try {
             const doc = await firebase.firestore().collection('repuestos').doc(id).get();
