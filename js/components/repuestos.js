@@ -283,9 +283,6 @@ const repuestosComponent = {
         }
     },
 
-    // Continúa con los demás métodos del componente...
-};
-
     async cargarRepuestosPaginados(page = 1) {
         try {
             const tbody = document.getElementById('repuestosTableBody');
