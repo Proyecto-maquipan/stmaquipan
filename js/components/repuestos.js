@@ -220,8 +220,11 @@ const repuestosComponent = {
                     <p>No se pudieron cargar los datos. Por favor, verifica tu conexión.</p>
                     <button class="btn btn-primary" onclick="router.navigate('dashboard')">Volver al Dashboard</button>
                 </div>
-                };
-                agregarEstilos() {
+            `;
+        }
+    },
+
+    agregarEstilos() {
         if (!document.getElementById('repuestos-styles')) {
             const style = document.createElement('style');
             style.id = 'repuestos-styles';
@@ -279,6 +282,9 @@ const repuestosComponent = {
             }
         }
     },
+
+    // Continúa con los demás métodos del componente...
+};
 
     async cargarRepuestosPaginados(page = 1) {
         try {
