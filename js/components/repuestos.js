@@ -41,10 +41,10 @@ const repuestosComponent = {
                             </select>
                         </div>
                         <div class="col-md-6 text-end">
-                            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addRepuestoModal">
+                            <button class="btn btn-primary me-2" onclick="repuestosComponent.abrirModalAgregarRepuesto()">
                                 <i class="fas fa-plus me-2"></i>Agregar Repuesto
                             </button>
-                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <button class="btn btn-success" onclick="repuestosComponent.abrirModalCargaMasiva()">
                                 <i class="fas fa-upload me-2"></i>Carga Masiva
                             </button>
                         </div>
@@ -130,7 +130,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('addRepuestoModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.guardarRepuesto()">Guardar</button>
                             </div>
                         </div>
@@ -173,7 +173,7 @@ const repuestosComponent = {
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('uploadModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.cargarRepuestosMasivo()" disabled id="uploadBtn">Cargar Datos</button>
                             </div>
                         </div>
@@ -222,6 +222,103 @@ const repuestosComponent = {
                 </div>
             `;
         }
+    },
+
+    // Función auxiliar para mostrar modales de forma segura
+    mostrarModal(modalId) {
+        try {
+            // Limpiar cualquier modal previo para evitar conflictos
+            this.limpiarUIBloqueada();
+            
+            const modalElement = document.getElementById(modalId);
+            if (!modalElement) {
+                console.error(`Modal ${modalId} no encontrado`);
+                return null;
+            }
+            
+            // Usar Bootstrap 5 para mostrar el modal
+            const modal = new bootstrap.Modal(modalElement, {
+                backdrop: 'static',  // Evita que se cierre al hacer clic fuera
+                keyboard: true       // Permite cerrar con ESC
+            });
+            
+            // Agregar manejador de errores al modal
+            modalElement.addEventListener('shown.bs.modal', () => {
+                console.log(`Modal ${modalId} mostrado correctamente`);
+            });
+            
+            modalElement.addEventListener('hide.bs.modal', () => {
+                // Limpiar cualquier estado al cerrar
+                console.log(`Modal ${modalId} cerrándose`);
+            });
+            
+            // Mostrar el modal
+            modal.show();
+            
+            return modal;
+        } catch (error) {
+            console.error(`Error al mostrar modal ${modalId}:`, error);
+            this.limpiarUIBloqueada();
+            return null;
+        }
+    },
+
+    // Función auxiliar para cerrar modales de forma segura
+    cerrarModal(modalId) {
+        try {
+            const modalElement = document.getElementById(modalId);
+            if (!modalElement) {
+                console.error(`Modal ${modalId} no encontrado`);
+                return false;
+            }
+            
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            } else {
+                // Fallback si no se puede obtener la instancia
+                modalElement.style.display = 'none';
+                modalElement.classList.remove('show');
+                this.limpiarUIBloqueada();
+            }
+            
+            return true;
+        } catch (error) {
+            console.error(`Error al cerrar modal ${modalId}:`, error);
+            this.limpiarUIBloqueada();
+            return false;
+        }
+    },
+
+    // Función para limpiar UI bloqueada
+    limpiarUIBloqueada() {
+        console.log('Limpiando UI bloqueada');
+        
+        // Cerrar todos los modales
+        document.querySelectorAll('.modal').forEach(modal => {
+            try {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+                modal.removeAttribute('aria-modal');
+            } catch (e) {
+                console.error('Error al cerrar modal:', e);
+            }
+        });
+        
+        // Remover backdrops
+        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+    },
+    
+    // Funciones para abrir los modales de forma segura
+    abrirModalAgregarRepuesto() {
+        this.mostrarModal('addRepuestoModal');
+    },
+    
+    abrirModalCargaMasiva() {
+        this.mostrarModal('uploadModal');
     },
 
     agregarEstilos() {
@@ -636,34 +733,13 @@ const repuestosComponent = {
             // Usar Promise.race para limitar el tiempo de espera
             await Promise.race([savePromise, timeoutPromise]);
             
-            // Intentar cerrar el modal de manera segura
-            try {
-                const modalElement = document.getElementById('addRepuestoModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    } else {
-                        // Fallback si no se puede obtener la instancia
-                        modalElement.style.display = 'none';
-                        modalElement.classList.remove('show');
-                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = '';
-                    }
-                }
-                
-                // Limpiar formulario
-                const form = document.getElementById('addRepuestoForm');
-                if (form) {
-                    form.reset();
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar modal backdrop manualmente
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
+            // Cerrar modal de forma segura
+            this.cerrarModal('addRepuestoModal');
+            
+            // Limpiar formulario
+            const form = document.getElementById('addRepuestoForm');
+            if (form) {
+                form.reset();
             }
             
             if (loadingSwal) {
@@ -695,6 +771,9 @@ const repuestosComponent = {
         } catch (error) {
             console.error('Error al guardar repuesto:', error);
             
+            // Limpiar UI en caso de error
+            this.limpiarUIBloqueada();
+            
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     title: 'Error',
@@ -705,11 +784,6 @@ const repuestosComponent = {
             } else {
                 alert('Error al guardar el repuesto: ' + (error.message || ''));
             }
-            
-            // Limpiar modal backdrop manualmente en caso de error
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
         }
     },
 
@@ -955,29 +1029,8 @@ const repuestosComponent = {
                 }
             }
             
-            // Cerrar modal en forma segura
-            try {
-                const modalElement = document.getElementById('uploadModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    } else {
-                        // Fallback si no se puede obtener la instancia
-                        modalElement.style.display = 'none';
-                        modalElement.classList.remove('show');
-                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = '';
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar modal backdrop manualmente
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-            }
+            // Cerrar modal de forma segura
+            this.cerrarModal('uploadModal');
             
             if (progressSwal) {
                 progressSwal.close();
@@ -1013,10 +1066,8 @@ const repuestosComponent = {
         } catch (error) {
             console.error('Error en carga masiva:', error);
             
-            // Limpiar modal backdrop manualmente en caso de error
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
+            // Limpiar UI en caso de error
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
@@ -1168,7 +1219,7 @@ const repuestosComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Editar Repuesto</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="repuestosComponent.cerrarModal('editRepuestoModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="editRepuestoForm">
@@ -1187,7 +1238,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('editRepuestoModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.actualizarRepuesto('${id}')">Actualizar</button>
                             </div>
                         </div>
@@ -1204,24 +1255,14 @@ const repuestosComponent = {
             // Agregar nuevo modal al DOM
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
-            // Mostrar modal
-            try {
-                const modalElement = document.getElementById('editRepuestoModal');
-                if (modalElement) {
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                }
-            } catch (modalError) {
-                console.error('Error al mostrar modal:', modalError);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
-                } else {
-                    alert('Error al mostrar el formulario de edición');
-                }
-            }
+            // Mostrar modal usando método seguro
+            this.mostrarModal('editRepuestoModal');
             
         } catch (error) {
             console.error('Error al editar repuesto:', error);
+            
+            // Limpiar UI en caso de error
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo cargar el repuesto para editar: ' + (error.message || ''), 'error');
@@ -1282,29 +1323,8 @@ const repuestosComponent = {
             // Usar Promise.race para limitar el tiempo de espera
             await Promise.race([updatePromise, timeoutPromise]);
             
-            // Intentar cerrar el modal de manera segura
-            try {
-                const modalElement = document.getElementById('editRepuestoModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    } else {
-                        // Fallback si no se puede obtener la instancia
-                        modalElement.style.display = 'none';
-                        modalElement.classList.remove('show');
-                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = '';
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar modal backdrop manualmente
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-            }
+            // Cerrar modal de forma segura
+            this.cerrarModal('editRepuestoModal');
             
             if (loadingSwal) {
                 loadingSwal.close();
@@ -1332,10 +1352,8 @@ const repuestosComponent = {
         } catch (error) {
             console.error('Error al actualizar repuesto:', error);
             
-            // Limpiar modal backdrop manualmente en caso de error
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
+            // Limpiar UI en caso de error
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo actualizar el repuesto: ' + (error.message || ''), 'error');
