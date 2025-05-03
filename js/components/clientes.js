@@ -1,9 +1,12 @@
 // Componente de Gestión de Clientes
 const clientesComponent = {
-async render(container) {
-    try {
-        const appContainer = container || document.getElementById('app');
-        appContainer.innerHTML = `
+    datosTemporales: [],
+    searchTimeout: null,
+    
+    async render(container) {
+        try {
+            const appContainer = container || document.getElementById('app');
+            appContainer.innerHTML = `
                 <div class="container-fluid">
                     <div class="row mb-4">
                         <div class="col-12">
@@ -168,16 +171,30 @@ async render(container) {
             // Cargar estilos personalizados
             this.agregarEstilos();
             
-            // Cargar datos iniciales
-            await this.cargarClientes();
+            try {
+                // Cargar datos iniciales con manejo de errores específico
+                await this.cargarClientes();
+            } catch (error) {
+                console.error('Error cargando clientes:', error);
+                const tbody = document.getElementById('clientesTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                Error al cargar los clientes. <button onclick="clientesComponent.cargarClientes()" class="btn btn-sm btn-primary">Reintentar</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
             
             // Inicializar eventos
             this.inicializarEventos();
             
-       } catch (error) {
-        console.error('Error al renderizar clientes:', error);
-        const appContainer = container || document.getElementById('app');
-        appContainer.innerHTML = `
+        } catch (error) {
+            console.error('Error al renderizar clientes:', error);
+            const appContainer = container || document.getElementById('app');
+            appContainer.innerHTML = `
                 <div class="alert alert-danger">
                     <h3>Error al cargar el módulo de clientes</h3>
                     <p>No se pudieron cargar los datos. Por favor, verifica tu conexión.</p>
@@ -211,9 +228,50 @@ async render(container) {
     
     async cargarClientes() {
         try {
-            const clientes = await FirebaseService.getClientes();
+            // Verificar que firebase esté inicializado
+            if (typeof FirebaseService === 'undefined') {
+                throw new Error('Servicio Firebase no está disponible');
+            }
             
             const tbody = document.getElementById('clientesTableBody');
+            if (!tbody) {
+                console.error('Elemento tbody no encontrado');
+                return;
+            }
+            
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando clientes...</td></tr>';
+            
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
+            // Intentar obtener clientes con storage primero
+            let clientes = [];
+            try {
+                if (typeof storage !== 'undefined' && typeof storage.getClientes === 'function') {
+                    const storagePromise = storage.getClientes();
+                    clientes = await Promise.race([storagePromise, timeoutPromise]);
+                } else {
+                    // Si no está storage, usar FirebaseService
+                    const firebasePromise = FirebaseService.getClientes();
+                    clientes = await Promise.race([firebasePromise, timeoutPromise]);
+                }
+            } catch (storageError) {
+                console.error('Error obteniendo clientes desde storage:', storageError);
+                
+                // Intentar con Firebase directamente como último recurso
+                if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                    const snapshot = await firebase.firestore().collection('clientes').get();
+                    clientes = [];
+                    snapshot.forEach(doc => {
+                        clientes.push({ ...doc.data(), id: doc.id });
+                    });
+                } else {
+                    throw new Error('No se pudo conectar con la base de datos');
+                }
+            }
+            
             tbody.innerHTML = '';
             
             if (clientes.length === 0) {
@@ -251,30 +309,77 @@ async render(container) {
             
         } catch (error) {
             console.error('Error al cargar clientes:', error);
-            Swal.fire('Error', 'No se pudieron cargar los clientes', 'error');
+            
+            const tbody = document.getElementById('clientesTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            Error al cargar los clientes. <button onclick="clientesComponent.cargarClientes()" class="btn btn-sm btn-primary">Reintentar</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'No se pudieron cargar los clientes: ' + (error.message || ''),
+                    icon: 'error',
+                    confirmButtonText: 'Aceptar'
+                });
+            }
+            
+            throw error; // Re-lanzar para manejo en render()
         }
     },
     
     async guardarCliente() {
         try {
-            const rut = document.getElementById('rut').value;
-            const razonSocial = document.getElementById('razonSocial').value;
-            const direccion = document.getElementById('direccion').value;
-            const ciudad = document.getElementById('ciudad').value;
-            const contacto = document.getElementById('contacto').value;
-            const telefono = document.getElementById('telefono').value;
-            const email = document.getElementById('email').value;
+            // Verificar que firebase esté inicializado
+            if (typeof storage === 'undefined' && typeof FirebaseService === 'undefined') {
+                throw new Error('Servicio de almacenamiento no está disponible');
+            }
+            
+            const rut = document.getElementById('rut')?.value;
+            const razonSocial = document.getElementById('razonSocial')?.value;
+            const direccion = document.getElementById('direccion')?.value;
+            const ciudad = document.getElementById('ciudad')?.value;
+            const contacto = document.getElementById('contacto')?.value;
+            const telefono = document.getElementById('telefono')?.value;
+            const email = document.getElementById('email')?.value || '';
             
             if (!rut || !razonSocial || !direccion || !ciudad || !contacto || !telefono) {
-                Swal.fire('Error', 'Todos los campos obligatorios deben ser completados', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Todos los campos obligatorios deben ser completados', 'error');
+                } else {
+                    alert('Todos los campos obligatorios deben ser completados');
+                }
                 return;
             }
             
             // Validar formato RUT
             const rutPattern = /^[0-9]{1,8}-[0-9kK]{1}$/;
             if (!rutPattern.test(rut)) {
-                Swal.fire('Error', 'El RUT debe tener el formato correcto (ej: 12345678-9)', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'El RUT debe tener el formato correcto (ej: 12345678-9)', 'error');
+                } else {
+                    alert('El RUT debe tener el formato correcto (ej: 12345678-9)');
+                }
                 return;
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Verificando y guardando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
             }
             
             // Datos del cliente
@@ -290,53 +395,190 @@ async render(container) {
             };
             
             // Verificar si el RUT ya existe
-            const clientes = await FirebaseService.getClientes();
-            const clienteExistente = clientes.find(c => c.rut === rut);
-            if (clienteExistente) {
-                Swal.fire('Error', 'Ya existe un cliente con ese RUT', 'error');
-                return;
+            try {
+                // Agregar tiempo de espera máximo
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Tiempo de espera agotado al verificar RUT')), 8000)
+                );
+                
+                // Intentar obtener clientes con storage primero
+                let clientes = [];
+                if (typeof storage !== 'undefined' && typeof storage.getClientes === 'function') {
+                    const storagePromise = storage.getClientes();
+                    clientes = await Promise.race([storagePromise, timeoutPromise]);
+                } else if (typeof FirebaseService !== 'undefined') {
+                    const fbPromise = FirebaseService.getClientes();
+                    clientes = await Promise.race([fbPromise, timeoutPromise]);
+                } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                    const snapshot = await firebase.firestore().collection('clientes').get();
+                    clientes = [];
+                    snapshot.forEach(doc => {
+                        clientes.push({ ...doc.data(), id: doc.id });
+                    });
+                }
+                
+                const clienteExistente = clientes.find(c => c.rut === rut);
+                if (clienteExistente) {
+                    if (loadingSwal) {
+                        loadingSwal.close();
+                    }
+                    
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', 'Ya existe un cliente con ese RUT', 'error');
+                    } else {
+                        alert('Ya existe un cliente con ese RUT');
+                    }
+                    return;
+                }
+            } catch (checkError) {
+                console.error('Error al verificar duplicados:', checkError);
+                // Continuar con la operación a pesar del error de verificación
             }
             
             // Guardar en Firebase
-            await FirebaseService.saveCliente(cliente);
-            
-            // Cerrar modal y resetear formulario
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addClienteModal'));
-            modal.hide();
-            document.getElementById('addClienteForm').reset();
-            
-            Swal.fire('Éxito', 'Cliente agregado correctamente', 'success');
-            
-            // Recargar datos
-            await this.cargarClientes();
-            
+            try {
+                // Agregar tiempo de espera máximo
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Tiempo de espera agotado al guardar')), 10000)
+                );
+                
+                // Intentar guardar con storage primero
+                let saveResult;
+                if (typeof storage !== 'undefined' && typeof storage.saveCliente === 'function') {
+                    const storagePromise = storage.saveCliente(cliente);
+                    saveResult = await Promise.race([storagePromise, timeoutPromise]);
+                } else if (typeof FirebaseService !== 'undefined') {
+                    const fbPromise = FirebaseService.saveCliente(cliente);
+                    saveResult = await Promise.race([fbPromise, timeoutPromise]);
+                } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                    // Generar código secuencial
+                    let nextNumber = 1000;
+                    try {
+                        const counterRef = firebase.firestore().collection('counters').doc('cliente');
+                        const counterDoc = await counterRef.get();
+                        
+                        if (counterDoc.exists) {
+                            nextNumber = counterDoc.data().value + 1;
+                            await counterRef.update({ value: nextNumber });
+                        } else {
+                            await counterRef.set({ value: nextNumber });
+                        }
+                    } catch (counterError) {
+                        console.error('Error al generar contador:', counterError);
+                    }
+                    
+                    cliente.codigo = "CLI-" + nextNumber;
+                    const docRef = await firebase.firestore().collection('clientes').add(cliente);
+                    await docRef.update({ id: docRef.id });
+                    saveResult = cliente.codigo;
+                } else {
+                    throw new Error('No hay método disponible para guardar');
+                }
+                
+                // Cerrar modal y resetear formulario
+                try {
+                    const modalElement = document.getElementById('addClienteModal');
+                    if (modalElement) {
+                        const modal = bootstrap.Modal.getInstance(modalElement);
+                        if (modal) {
+                            modal.hide();
+                        } else {
+                            // Fallback si no se puede obtener la instancia
+                            modalElement.style.display = 'none';
+                            modalElement.classList.remove('show');
+                            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = '';
+                        }
+                    }
+                    
+                    const form = document.getElementById('addClienteForm');
+                    if (form) {
+                        form.reset();
+                    }
+                } catch (modalError) {
+                    console.error('Error al cerrar modal:', modalError);
+                    // Limpiar manualmente
+                    document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                }
+                
+                if (loadingSwal) {
+                    loadingSwal.close();
+                }
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Éxito', 'Cliente agregado correctamente', 'success');
+                } else {
+                    alert('Cliente agregado correctamente');
+                }
+                
+                // Recargar datos
+                await this.cargarClientes();
+                
+            } catch (error) {
+                console.error('Error al guardar cliente:', error);
+                
+                if (loadingSwal) {
+                    loadingSwal.close();
+                }
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'No se pudo guardar el cliente: ' + (error.message || ''), 'error');
+                } else {
+                    alert('Error al guardar el cliente: ' + (error.message || ''));
+                }
+                
+                // Limpiar manualmente en caso de error
+                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+            }
         } catch (error) {
-            console.error('Error al guardar cliente:', error);
-            Swal.fire('Error', 'No se pudo guardar el cliente', 'error');
+            console.error('Error al procesar guardado de cliente:', error);
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Error al procesar la solicitud: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al procesar la solicitud: ' + (error.message || ''));
+            }
+            
+            // Limpiar manualmente en caso de error global
+            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
         }
     },
     
     procesarArchivo(input) {
-        const file = input.files[0];
-        if (!file) return;
+        if (!input || !input.files || !input.files[0]) return;
         
+        const file = input.files[0];
         const reader = new FileReader();
         
         reader.onload = (e) => {
-            const data = e.target.result;
-            let parsedData = [];
-            
             try {
+                const data = e.target.result;
+                let parsedData = [];
+                
                 if (file.name.endsWith('.csv')) {
                     // Procesar CSV
                     parsedData = this.procesarCSV(data);
                 } else {
                     // Procesar Excel
+                    if (typeof XLSX === 'undefined') {
+                        throw new Error('Librería XLSX no encontrada');
+                    }
                     parsedData = this.procesarExcel(data);
                 }
                 
                 if (parsedData.length === 0) {
-                    Swal.fire('Error', 'No se encontraron datos válidos en el archivo', 'error');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', 'No se encontraron datos válidos en el archivo', 'error');
+                    } else {
+                        alert('No se encontraron datos válidos en el archivo');
+                    }
                     return;
                 }
                 
@@ -345,13 +587,21 @@ async render(container) {
                 
             } catch (error) {
                 console.error('Error procesando archivo:', error);
-                Swal.fire('Error', 'Error al procesar el archivo. Verifique el formato.', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Error al procesar el archivo. ' + (error.message || ''), 'error');
+                } else {
+                    alert('Error al procesar el archivo: ' + (error.message || ''));
+                }
             }
         };
         
         reader.onerror = (error) => {
             console.error('Error leyendo archivo:', error);
-            Swal.fire('Error', 'Error al leer el archivo', 'error');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Error al leer el archivo', 'error');
+            } else {
+                alert('Error al leer el archivo');
+            }
         };
         
         if (file.name.endsWith('.csv')) {
@@ -400,6 +650,10 @@ async render(container) {
     },
     
     procesarExcel(data) {
+        if (typeof XLSX === 'undefined') {
+            throw new Error('Librería XLSX no encontrada');
+        }
+        
         const workbook = XLSX.read(data, { type: 'binary' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
@@ -407,7 +661,7 @@ async render(container) {
         if (jsonData.length < 2) return [];
         
         // Procesar encabezados
-        const headers = jsonData[0].map(h => h.toString().trim().toLowerCase());
+        const headers = jsonData[0].map(h => h ? h.toString().trim().toLowerCase() : '');
         
         // Validar encabezados
         const requiredHeaders = ['rut', 'razón social', 'dirección', 'ciudad', 'contacto', 'teléfono', 'email'];
@@ -453,6 +707,11 @@ async render(container) {
         const previewTableBody = document.getElementById('previewTableBody');
         const uploadBtn = document.getElementById('uploadBtn');
         
+        if (!previewArea || !previewTableBody || !uploadBtn) {
+            console.error('Elementos de preview no encontrados');
+            return;
+        }
+        
         previewTableBody.innerHTML = '';
         datos.slice(0, 5).forEach(item => {
             previewTableBody.innerHTML += `
@@ -482,78 +741,217 @@ async render(container) {
     
     async cargarClientesMasivo() {
         if (!this.datosTemporales || this.datosTemporales.length === 0) {
-            Swal.fire('Error', 'No hay datos para cargar', 'error');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No hay datos para cargar', 'error');
+            } else {
+                alert('No hay datos para cargar');
+            }
             return;
         }
         
         try {
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' && typeof FirebaseService === 'undefined' && typeof storage === 'undefined') {
+                throw new Error('Servicio de almacenamiento no está disponible');
+            }
+            
             const totalRegistros = this.datosTemporales.length;
             const batchSize = 100; // Procesar en lotes de 100
             let procesados = 0;
             let errores = 0;
             
-            // Obtener clientes existentes para verificar RUTs duplicados
-            const clientesExistentes = await FirebaseService.getClientes();
-            const rutsExistentes = new Set(clientesExistentes.map(c => c.rut));
-            
-            Swal.fire({
-                title: 'Cargando clientes...',
-                html: `Procesando: <b>0</b> de ${totalRegistros}`,
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-            
-            // Procesar en lotes para evitar sobrecargar Firebase
-            for (let i = 0; i < totalRegistros; i += batchSize) {
-                const batch = firebase.firestore().batch();
-                const lote = this.datosTemporales.slice(i, i + batchSize);
-                
-                for (const cliente of lote) {
-                    // Verificar RUT duplicado
-                    if (rutsExistentes.has(cliente.rut)) {
-                        console.warn(`RUT duplicado: ${cliente.rut}`);
-                        errores++;
-                        continue; // Saltar este registro
+            // Mostrar indicador de progreso
+            let progressSwal;
+            if (typeof Swal !== 'undefined') {
+                progressSwal = Swal.fire({
+                    title: 'Cargando clientes...',
+                    html: `Procesando: <b>0</b> de ${totalRegistros}`,
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
                     }
-                    
-                    // Validar formato RUT
-                    const rutPattern = /^[0-9]{1,8}-[0-9kK]{1}$/;
-                    if (!rutPattern.test(cliente.rut)) {
-                        console.warn(`Formato RUT inválido: ${cliente.rut}`);
-                        errores++;
-                        continue; // Saltar este registro
-                    }
-                    
-                    // Agregar RUT a la lista de existentes para verificar duplicados en el mismo lote
-                    rutsExistentes.add(cliente.rut);
-                    
-                    const docRef = firebase.firestore().collection('clientes').doc();
-                    
-                    batch.set(docRef, {
-                        ...cliente,
-                        id: docRef.id,
-                        fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                
-                await batch.commit();
-                procesados += lote.length - errores;
-                
-                // Actualizar progreso
-                Swal.update({
-                    html: `Procesando: <b>${procesados}</b> de ${totalRegistros} (${errores} errores)`
                 });
             }
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
-            modal.hide();
+            // Obtener clientes existentes para verificar RUTs duplicados
+            let clientesExistentes = [];
+            try {
+                if (typeof storage !== 'undefined' && typeof storage.getClientes === 'function') {
+                    clientesExistentes = await storage.getClientes();
+                } else if (typeof FirebaseService !== 'undefined') {
+                    clientesExistentes = await FirebaseService.getClientes();
+                } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                    const snapshot = await firebase.firestore().collection('clientes').get();
+                    clientesExistentes = [];
+                    snapshot.forEach(doc => {
+                        clientesExistentes.push({ ...doc.data(), id: doc.id });
+                    });
+                }
+            } catch (error) {
+                console.error('Error al obtener clientes existentes:', error);
+            }
+            
+            const rutsExistentes = new Set(clientesExistentes.map(c => c.rut));
+            
+            // Usar la API de Batch de Firebase si está disponible
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                for (let i = 0; i < totalRegistros; i += batchSize) {
+                    const batch = firebase.firestore().batch();
+                    const lote = this.datosTemporales.slice(i, i + batchSize);
+                    
+                    // Generar código secuencial
+                    let nextNumber = 1000;
+                    try {
+                        const counterRef = firebase.firestore().collection('counters').doc('cliente');
+                        const counterDoc = await counterRef.get();
+                        
+                        if (counterDoc.exists) {
+                            nextNumber = counterDoc.data().value;
+                        }
+                    } catch (counterError) {
+                        console.error('Error al obtener contador:', counterError);
+                    }
+                    
+                    let batchItemCount = 0;
+                    
+                    for (const cliente of lote) {
+                        // Verificar RUT duplicado
+                        if (rutsExistentes.has(cliente.rut)) {
+                            console.warn(`RUT duplicado: ${cliente.rut}`);
+                            errores++;
+                            continue; // Saltar este registro
+                        }
+                        
+                        // Validar formato RUT
+                        const rutPattern = /^[0-9]{1,8}-[0-9kK]{1}$/;
+                        if (!rutPattern.test(cliente.rut)) {
+                            console.warn(`Formato RUT inválido: ${cliente.rut}`);
+                            errores++;
+                            continue; // Saltar este registro
+                        }
+                        
+                        // Agregar RUT a la lista de existentes para verificar duplicados en el mismo lote
+                        rutsExistentes.add(cliente.rut);
+                        
+                        nextNumber++;
+                        const codigo = "CLI-" + nextNumber;
+                        
+                        const docRef = firebase.firestore().collection('clientes').doc();
+                        
+                        batch.set(docRef, {
+                            ...cliente,
+                            id: docRef.id,
+                            codigo: codigo,
+                            fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        
+                        batchItemCount++;
+                    }
+                    
+                    if (batchItemCount > 0) {
+                        // Actualizar el contador para el siguiente lote
+                        const counterRef = firebase.firestore().collection('counters').doc('cliente');
+                        batch.update(counterRef, { value: nextNumber });
+                        
+                        // Ejecutar el batch
+                        await batch.commit();
+                    }
+                    
+                    procesados += batchItemCount;
+                    
+                    // Actualizar progreso
+                    if (progressSwal) {
+                        Swal.update({
+                            html: `Procesando: <b>${procesados}</b> de ${totalRegistros} (${errores} errores)`
+                        });
+                    }
+                }
+            } else {
+                // Versión alternativa sin Batch API
+                for (let i = 0; i < totalRegistros; i += batchSize) {
+                    const lote = this.datosTemporales.slice(i, i + batchSize);
+                    
+                    for (const cliente of lote) {
+                        // Verificar RUT duplicado
+                        if (rutsExistentes.has(cliente.rut)) {
+                            console.warn(`RUT duplicado: ${cliente.rut}`);
+                            errores++;
+                            continue; // Saltar este registro
+                        }
+                        
+                        // Validar formato RUT
+                        const rutPattern = /^[0-9]{1,8}-[0-9kK]{1}$/;
+                        if (!rutPattern.test(cliente.rut)) {
+                            console.warn(`Formato RUT inválido: ${cliente.rut}`);
+                            errores++;
+                            continue; // Saltar este registro
+                        }
+                        
+                        // Agregar RUT a la lista de existentes
+                        rutsExistentes.add(cliente.rut);
+                        
+                        try {
+                            if (typeof storage !== 'undefined' && typeof storage.saveCliente === 'function') {
+                                await storage.saveCliente(cliente);
+                            } else if (typeof FirebaseService !== 'undefined') {
+                                await FirebaseService.saveCliente(cliente);
+                            }
+                            procesados++;
+                        } catch (saveError) {
+                            console.error('Error guardando cliente:', saveError);
+                            errores++;
+                        }
+                        
+                        // Actualizar progreso
+                        if (progressSwal) {
+                            Swal.update({
+                                html: `Procesando: <b>${procesados}</b> de ${totalRegistros} (${errores} errores)`
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Cerrar modal
+            try {
+                const modalElement = document.getElementById('uploadModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    } else {
+                        // Fallback si no se puede obtener la instancia
+                        modalElement.style.display = 'none';
+                        modalElement.classList.remove('show');
+                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+            }
+            
+            if (progressSwal) {
+                progressSwal.close();
+            }
             
             if (errores > 0) {
-                Swal.fire('Completado con advertencias', `${procesados} clientes cargados correctamente. ${errores} registros no pudieron procesarse debido a datos incompletos o RUTs duplicados.`, 'warning');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Completado con advertencias', `${procesados} clientes cargados correctamente. ${errores} registros no pudieron procesarse debido a datos incompletos o RUTs duplicados.`, 'warning');
+                } else {
+                    alert(`Completado con advertencias: ${procesados} clientes cargados, ${errores} errores`);
+                }
             } else {
-                Swal.fire('Éxito', `${procesados} clientes cargados correctamente`, 'success');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Éxito', `${procesados} clientes cargados correctamente`, 'success');
+                } else {
+                    alert(`Éxito: ${procesados} clientes cargados correctamente`);
+                }
             }
             
             // Recargar datos
@@ -561,56 +959,209 @@ async render(container) {
             
             // Resetear
             this.datosTemporales = [];
-            document.getElementById('fileInput').value = '';
-            document.getElementById('previewArea').style.display = 'none';
-            document.getElementById('uploadBtn').disabled = true;
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.value = '';
+            }
+            const previewArea = document.getElementById('previewArea');
+            if (previewArea) {
+                previewArea.style.display = 'none';
+            }
+            const uploadBtn = document.getElementById('uploadBtn');
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+            }
             
         } catch (error) {
             console.error('Error en carga masiva:', error);
-            Swal.fire('Error', `No se pudieron cargar los clientes: ${error.message}`, 'error');
+            
+            // Limpiar manualmente en caso de error
+            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', `No se pudieron cargar los clientes: ${error.message}`, 'error');
+            } else {
+                alert(`Error en carga masiva: ${error.message}`);
+            }
         }
     },
     
     async eliminarCliente(id) {
-        // Verificar si el cliente tiene locales asociados
+        if (!id) return;
+        
         try {
-            const locales = await FirebaseService.getLocalesByCliente(id);
+            // Verificar si hay disponible algún servicio de almacenamiento
+            if (typeof storage === 'undefined' && typeof FirebaseService === 'undefined' && typeof firebase === 'undefined') {
+                throw new Error('Servicio de almacenamiento no está disponible');
+            }
             
-            if (locales.length > 0) {
-                Swal.fire('Error', `No se puede eliminar el cliente porque tiene ${locales.length} locales asociados. Elimine primero los locales.`, 'error');
+            // Verificar si el cliente tiene locales asociados
+            let tieneLocales = false;
+            try {
+                if (typeof FirebaseService !== 'undefined' && typeof FirebaseService.getLocalesByCliente === 'function') {
+                    const locales = await FirebaseService.getLocalesByCliente(id);
+                    tieneLocales = locales && locales.length > 0;
+                } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                    const snapshot = await firebase.firestore().collection('locales')
+                        .where('clienteId', '==', id)
+                        .limit(1)
+                        .get();
+                    tieneLocales = !snapshot.empty;
+                }
+            } catch (error) {
+                console.warn('Error al verificar locales asociados:', error);
+                // Continuar con la eliminación a pesar del error
+            }
+            
+            if (tieneLocales) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', `No se puede eliminar el cliente porque tiene locales asociados. Elimine primero los locales.`, 'error');
+                } else {
+                    alert('No se puede eliminar el cliente porque tiene locales asociados. Elimine primero los locales.');
+                }
                 return;
             }
             
-            const result = await Swal.fire({
-                title: '¿Estás seguro?',
-                text: "Esta acción no se puede deshacer",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            });
-            
-            if (result.isConfirmed) {
-                await FirebaseService.deleteCliente(id);
-                Swal.fire('Eliminado', 'El cliente ha sido eliminado', 'success');
+            // Pedir confirmación
+            let confirmed = false;
+            if (typeof Swal !== 'undefined') {
+                const result = await Swal.fire({
+                    title: '¿Estás seguro?',
+                    text: "Esta acción no se puede deshacer",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                });
                 
-                // Recargar datos
-                await this.cargarClientes();
+                confirmed = result.isConfirmed;
+            } else {
+                confirmed = confirm("¿Estás seguro de que deseas eliminar este cliente?");
             }
+            
+            if (!confirmed) return;
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Eliminando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // Eliminar cliente
+            if (typeof storage !== 'undefined' && typeof storage.deleteCliente === 'function') {
+                await storage.deleteCliente(id);
+            } else if (typeof FirebaseService !== 'undefined' && typeof FirebaseService.deleteCliente === 'function') {
+                await FirebaseService.deleteCliente(id);
+            } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                await firebase.firestore().collection('clientes').doc(id).delete();
+            } else {
+                throw new Error('No hay método disponible para eliminar');
+            }
+            
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Eliminado', 'El cliente ha sido eliminado', 'success');
+            } else {
+                alert('Cliente eliminado correctamente');
+            }
+            
+            // Recargar datos
+            await this.cargarClientes();
+            
         } catch (error) {
             console.error('Error al eliminar cliente:', error);
-            Swal.fire('Error', 'No se pudo eliminar el cliente', 'error');
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudo eliminar el cliente: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al eliminar el cliente: ' + (error.message || ''));
+            }
         }
     },
     
     async editarCliente(id) {
+        if (!id) return;
+        
         try {
-            const cliente = await FirebaseService.getClienteById(id);
+            // Verificar si hay disponible algún servicio de almacenamiento
+            if (typeof storage === 'undefined' && typeof FirebaseService === 'undefined' && typeof firebase === 'undefined') {
+                throw new Error('Servicio de almacenamiento no está disponible');
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Cargando cliente...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // Buscar cliente
+            let cliente = null;
+            
+            if (typeof FirebaseService !== 'undefined' && typeof FirebaseService.getClienteById === 'function') {
+                cliente = await FirebaseService.getClienteById(id);
+            } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                const doc = await firebase.firestore().collection('clientes').doc(id).get();
+                if (doc.exists) {
+                    cliente = { id: doc.id, ...doc.data() };
+                }
+            } else {
+                // Intentar buscar en la lista de clientes cargada
+                const tbody = document.getElementById('clientesTableBody');
+                const rows = tbody.querySelectorAll('tr');
+                
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 7) {
+                        const editButton = cells[6].querySelector('button.btn-info');
+                        if (editButton && editButton.getAttribute('onclick').includes(id)) {
+                            cliente = {
+                                id,
+                                codigo: cells[0].textContent,
+                                rut: cells[1].textContent,
+                                razonSocial: cells[2].textContent,
+                                contacto: cells[3].textContent,
+                                telefono: cells[4].textContent,
+                                email: cells[5].textContent,
+                                direccion: '', // No disponible en la tabla
+                                ciudad: ''      // No disponible en la tabla
+                            };
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
             
             if (!cliente) {
-                Swal.fire('Error', 'No se encontró el cliente', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'No se encontró el cliente', 'error');
+                } else {
+                    alert('No se encontró el cliente');
+                }
                 return;
             }
             
@@ -683,46 +1234,125 @@ async render(container) {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
             // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('editClienteModal'));
-            modal.show();
+            try {
+                const modalElement = document.getElementById('editClienteModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                }
+            } catch (modalError) {
+                console.error('Error al mostrar modal:', modalError);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
+                } else {
+                    alert('Error al mostrar el formulario de edición');
+                }
+            }
             
         } catch (error) {
             console.error('Error al editar cliente:', error);
-            Swal.fire('Error', 'No se pudo cargar el cliente para editar', 'error');
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudo cargar el cliente para editar: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al cargar el cliente para editar: ' + (error.message || ''));
+            }
         }
     },
     
     async actualizarCliente(id) {
+        if (!id) return;
+        
         try {
-            const rut = document.getElementById('editRut').value;
-            const razonSocial = document.getElementById('editRazonSocial').value;
-            const direccion = document.getElementById('editDireccion').value;
-            const ciudad = document.getElementById('editCiudad').value;
-            const contacto = document.getElementById('editContacto').value;
-            const telefono = document.getElementById('editTelefono').value;
-            const email = document.getElementById('editEmail').value;
+            // Verificar si hay disponible algún servicio de almacenamiento
+            if (typeof storage === 'undefined' && typeof FirebaseService === 'undefined' && typeof firebase === 'undefined') {
+                throw new Error('Servicio de almacenamiento no está disponible');
+            }
+            
+            const rut = document.getElementById('editRut')?.value;
+            const razonSocial = document.getElementById('editRazonSocial')?.value;
+            const direccion = document.getElementById('editDireccion')?.value;
+            const ciudad = document.getElementById('editCiudad')?.value;
+            const contacto = document.getElementById('editContacto')?.value;
+            const telefono = document.getElementById('editTelefono')?.value;
+            const email = document.getElementById('editEmail')?.value || '';
             
             if (!rut || !razonSocial || !direccion || !ciudad || !contacto || !telefono) {
-                Swal.fire('Error', 'Todos los campos obligatorios deben ser completados', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Todos los campos obligatorios deben ser completados', 'error');
+                } else {
+                    alert('Todos los campos obligatorios deben ser completados');
+                }
                 return;
             }
             
             // Validar formato RUT
             const rutPattern = /^[0-9]{1,8}-[0-9kK]{1}$/;
             if (!rutPattern.test(rut)) {
-                Swal.fire('Error', 'El RUT debe tener el formato correcto (ej: 12345678-9)', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'El RUT debe tener el formato correcto (ej: 12345678-9)', 'error');
+                } else {
+                    alert('El RUT debe tener el formato correcto (ej: 12345678-9)');
+                }
                 return;
             }
             
             // Verificar RUT duplicado (solo si se cambió el RUT)
-            const clienteActual = await FirebaseService.getClienteById(id);
-            if (rut !== clienteActual.rut) {
-                const clientes = await FirebaseService.getClientes();
-                const clienteExistente = clientes.find(c => c.rut === rut && c.id !== id);
-                if (clienteExistente) {
-                    Swal.fire('Error', 'Ya existe otro cliente con ese RUT', 'error');
-                    return;
+            try {
+                // Buscar cliente actual
+                let clienteActual = null;
+                
+                if (typeof FirebaseService !== 'undefined' && typeof FirebaseService.getClienteById === 'function') {
+                    clienteActual = await FirebaseService.getClienteById(id);
+                } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                    const doc = await firebase.firestore().collection('clientes').doc(id).get();
+                    if (doc.exists) {
+                        clienteActual = { id: doc.id, ...doc.data() };
+                    }
                 }
+                
+                if (clienteActual && rut !== clienteActual.rut) {
+                    // El RUT ha cambiado, verificar si ya existe
+                    let clientes = [];
+                    
+                    if (typeof storage !== 'undefined' && typeof storage.getClientes === 'function') {
+                        clientes = await storage.getClientes();
+                    } else if (typeof FirebaseService !== 'undefined') {
+                        clientes = await FirebaseService.getClientes();
+                    } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                        const snapshot = await firebase.firestore().collection('clientes').get();
+                        clientes = [];
+                        snapshot.forEach(doc => {
+                            clientes.push({ ...doc.data(), id: doc.id });
+                        });
+                    }
+                    
+                    const clienteExistente = clientes.find(c => c.rut === rut && c.id !== id);
+                    if (clienteExistente) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('Error', 'Ya existe otro cliente con ese RUT', 'error');
+                        } else {
+                            alert('Ya existe otro cliente con ese RUT');
+                        }
+                        return;
+                    }
+                }
+            } catch (checkError) {
+                console.error('Error al verificar duplicados:', checkError);
+                // Continuar con la operación a pesar del error de verificación
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Actualizando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
             }
             
             // Datos del cliente
@@ -738,25 +1368,71 @@ async render(container) {
             };
             
             // Actualizar en Firebase
-            await FirebaseService.updateCliente(id, clienteData);
+            if (typeof storage !== 'undefined' && typeof storage.updateCliente === 'function') {
+                await storage.updateCliente(id, clienteData);
+            } else if (typeof FirebaseService !== 'undefined' && typeof FirebaseService.updateCliente === 'function') {
+                await FirebaseService.updateCliente(id, clienteData);
+            } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                await firebase.firestore().collection('clientes').doc(id).update(clienteData);
+            } else {
+                throw new Error('No hay método disponible para actualizar');
+            }
             
             // Cerrar modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editClienteModal'));
-            modal.hide();
+            try {
+                const modalElement = document.getElementById('editClienteModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    } else {
+                        // Fallback si no se puede obtener la instancia
+                        modalElement.style.display = 'none';
+                        modalElement.classList.remove('show');
+                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+            }
             
-            Swal.fire('Éxito', 'Cliente actualizado correctamente', 'success');
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Éxito', 'Cliente actualizado correctamente', 'success');
+            } else {
+                alert('Cliente actualizado correctamente');
+            }
             
             // Recargar datos
             await this.cargarClientes();
             
         } catch (error) {
             console.error('Error al actualizar cliente:', error);
-            Swal.fire('Error', 'No se pudo actualizar el cliente', 'error');
+            
+            // Limpiar manualmente en caso de error
+            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudo actualizar el cliente: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al actualizar el cliente: ' + (error.message || ''));
+            }
         }
     },
     
     async buscarClientes() {
-        const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+        const searchTerm = document.getElementById('searchInput')?.value?.trim()?.toLowerCase() || '';
         
         if (!searchTerm) {
             await this.cargarClientes();
@@ -765,10 +1441,36 @@ async render(container) {
         
         try {
             const tbody = document.getElementById('clientesTableBody');
+            if (!tbody) return;
+            
             tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando clientes...</td></tr>';
             
+            // Verificar si hay disponible algún servicio de almacenamiento
+            if (typeof storage === 'undefined' && typeof FirebaseService === 'undefined' && typeof firebase === 'undefined') {
+                throw new Error('Servicio de almacenamiento no está disponible');
+            }
+            
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
             // Obtener todos los clientes (en una aplicación real, se debería implementar búsqueda en servidor)
-            const clientes = await FirebaseService.getClientes();
+            let clientes = [];
+            
+            if (typeof storage !== 'undefined' && typeof storage.getClientes === 'function') {
+                const storagePromise = storage.getClientes();
+                clientes = await Promise.race([storagePromise, timeoutPromise]);
+            } else if (typeof FirebaseService !== 'undefined') {
+                const fbPromise = FirebaseService.getClientes();
+                clientes = await Promise.race([fbPromise, timeoutPromise]);
+            } else if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                const snapshot = await firebase.firestore().collection('clientes').get();
+                clientes = [];
+                snapshot.forEach(doc => {
+                    clientes.push({ ...doc.data(), id: doc.id });
+                });
+            }
             
             // Filtrar clientes por término de búsqueda
             const resultados = clientes.filter(cliente => 
@@ -815,7 +1517,21 @@ async render(container) {
             
         } catch (error) {
             console.error('Error en búsqueda:', error);
-            Swal.fire('Error', 'Error al realizar la búsqueda', 'error');
+            
+            const tbody = document.getElementById('clientesTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            Error al realizar la búsqueda. <button onclick="clientesComponent.cargarClientes()" class="btn btn-sm btn-primary">Recargar todos</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Error al realizar la búsqueda: ' + (error.message || ''), 'error');
+            }
         }
     },
     
@@ -823,12 +1539,19 @@ async render(container) {
         // Búsqueda con debounce
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
-            let timeout;
             searchInput.addEventListener('input', () => {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => {
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
                     this.buscarClientes();
                 }, 500);
+            });
+            
+            // Buscar al presionar Enter
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.buscarClientes();
+                }
             });
         }
         
@@ -849,15 +1572,23 @@ async render(container) {
                 e.preventDefault();
                 uploadArea.style.backgroundColor = '';
                 
+                if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files[0]) return;
+                
                 const file = e.dataTransfer.files[0];
                 if (file && (file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
-                    document.getElementById('fileInput').files = e.dataTransfer.files;
-                    this.procesarArchivo(document.getElementById('fileInput'));
+                    const fileInput = document.getElementById('fileInput');
+                    if (fileInput) {
+                        fileInput.files = e.dataTransfer.files;
+                        this.procesarArchivo(fileInput);
+                    }
                 } else {
-                    Swal.fire('Error', 'Por favor selecciona un archivo CSV o Excel', 'error');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', 'Por favor selecciona un archivo CSV o Excel', 'error');
+                    } else {
+                        alert('Por favor selecciona un archivo CSV o Excel');
+                    }
                 }
             });
         }
     }
 };
-
