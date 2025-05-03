@@ -728,7 +728,7 @@ const repuestosComponent = {
             Swal.fire('Error', 'No se pudo eliminar el repuesto', 'error');
         }
     }
-}
+},
     async editarRepuesto(id) {
         try {
             const doc = await firebase.firestore().collection('repuestos').doc(id).get();
