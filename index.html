@@ -129,7 +129,6 @@
                 document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
             } catch(e) {
                 console.error('Error al limpiar modales:', e);
             }
@@ -215,6 +214,128 @@
         } else {
             uiBlockDetector.init();
         }
+    })();
+    </script>
+
+    <!-- Sistema de gestión segura de modales para toda la aplicación -->
+    <script>
+    (function() {
+        // Función global para mostrar modales de forma segura
+        window.mostrarModalSeguro = function(modalId) {
+            try {
+                console.log('Mostrando modal de forma segura:', modalId);
+                
+                // Limpiar cualquier modal previo
+                window.limpiarUIBloqueada();
+                
+                const modalElement = document.getElementById(modalId);
+                if (!modalElement) {
+                    console.error(`Modal ${modalId} no encontrado`);
+                    return null;
+                }
+                
+                // Usar Bootstrap para mostrar el modal
+                const modal = new bootstrap.Modal(modalElement, {
+                    backdrop: 'static',
+                    keyboard: true
+                });
+                
+                modal.show();
+                return modal;
+            } catch (error) {
+                console.error('Error al mostrar modal:', error);
+                window.limpiarUIBloqueada();
+                return null;
+            }
+        };
+
+        // Función global para cerrar modales de forma segura
+        window.cerrarModalSeguro = function(modalId) {
+            try {
+                console.log('Cerrando modal:', modalId);
+                
+                const modalElement = document.getElementById(modalId);
+                if (!modalElement) {
+                    console.error(`Modal ${modalId} no encontrado`);
+                    return false;
+                }
+                
+                // Intentar obtener la instancia de Bootstrap
+                let modal = bootstrap.Modal.getInstance(modalElement);
+                
+                if (modal) {
+                    modal.hide();
+                } else {
+                    // Fallback si no se puede obtener la instancia
+                    modalElement.style.display = 'none';
+                    modalElement.classList.remove('show');
+                    window.limpiarUIBloqueada();
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error al cerrar modal:', error);
+                window.limpiarUIBloqueada();
+                return false;
+            }
+        };
+
+        // Función global para limpiar UI bloqueada
+        window.limpiarUIBloqueada = function() {
+            console.log('Limpiando UI bloqueada');
+            
+            // Cerrar todos los modales
+            document.querySelectorAll('.modal').forEach(modal => {
+                try {
+                    modal.style.display = 'none';
+                    modal.classList.remove('show');
+                    modal.setAttribute('aria-hidden', 'true');
+                    modal.removeAttribute('aria-modal');
+                } catch (e) {
+                    console.error('Error al cerrar modal:', e);
+                }
+            });
+            
+            // Remover backdrops
+            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+        };
+
+        // Interceptar eventos de clic para botones de modal
+        document.addEventListener('click', function(event) {
+            // Detectar botones que abren modales
+            const modalTrigger = event.target.closest('[data-bs-toggle="modal"]');
+            if (modalTrigger) {
+                event.preventDefault();
+                const targetModalId = modalTrigger.getAttribute('data-bs-target').replace('#', '');
+                window.mostrarModalSeguro(targetModalId);
+            }
+            
+            // Detectar botones que cierran modales
+            const closeButton = event.target.closest('[data-bs-dismiss="modal"]');
+            if (closeButton) {
+                event.preventDefault();
+                const modal = closeButton.closest('.modal');
+                if (modal) {
+                    window.cerrarModalSeguro(modal.id);
+                }
+            }
+        });
+
+        // Monitorear UI bloqueada automáticamente
+        setInterval(function() {
+            const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+            const modalesActivos = document.querySelectorAll('.modal.show');
+            
+            // Si hay backdrops pero no hay modales activos, limpiar
+            if (modalBackdrops.length > 0 && modalesActivos.length === 0) {
+                console.log('UI bloqueada detectada - limpiando automáticamente');
+                window.limpiarUIBloqueada();
+            }
+        }, 3000);
+
+        console.log('Sistema de gestión segura de modales inicializado');
     })();
     </script>
 </body>
