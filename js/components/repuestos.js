@@ -220,6 +220,7 @@ const repuestosComponent = {
                     <p>No se pudieron cargar los datos. Por favor, verifica tu conexión.</p>
                     <button class="btn btn-primary" onclick="router.navigate('dashboard')">Volver al Dashboard</button>
                 </div>
+                };
                 agregarEstilos() {
         if (!document.getElementById('repuestos-styles')) {
             const style = document.createElement('style');
