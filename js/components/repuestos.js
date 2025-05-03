@@ -226,29 +226,30 @@ const repuestosComponent = {
 
     // Función auxiliar para mostrar modales de forma segura
     // Función auxiliar para mostrar modales de forma segura
+// Funciones auxiliares para mostrar modales de forma segura
 mostrarModal(modalId) {
-    return window.mostrarModalSeguro(modalId);
+    return ModalManager.open(modalId);
 },
 
 // Función auxiliar para cerrar modales de forma segura
 cerrarModal(modalId) {
-    return window.cerrarModalSeguro(modalId);
+    return ModalManager.close(modalId);
 },
 
 // Función para limpiar UI bloqueada
 limpiarUIBloqueada() {
     // Usar la función global
-    window.limpiarUIBloqueada();
+    ModalManager.cleanUI();
 },
-    
-    // Funciones para abrir los modales de forma segura
-    abrirModalAgregarRepuesto() {
-        this.mostrarModal('addRepuestoModal');
-    },
-    
-    abrirModalCargaMasiva() {
-        this.mostrarModal('uploadModal');
-    },
+
+// Funciones para abrir los modales de forma segura
+abrirModalAgregarRepuesto() {
+    this.mostrarModal('addRepuestoModal');
+},
+
+abrirModalCargaMasiva() {
+    this.mostrarModal('uploadModal');
+},
 
     agregarEstilos() {
         if (!document.getElementById('repuestos-styles')) {
@@ -647,26 +648,16 @@ limpiarUIBloqueada() {
             });
         }
         
-        // Agregar tiempo de espera máximo
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
-        );
+        // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+        this.cerrarModal('addRepuestoModal');
         
-        const savePromise = firebase.firestore().collection('repuestos').add({
+        // Guardar en Firebase
+        await firebase.firestore().collection('repuestos').add({
             codigo,
             nombre,
             precio,
             fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
-        // Usar Promise.race para limitar el tiempo de espera
-        await Promise.race([savePromise, timeoutPromise]);
-        
-        // Cerrar modal de forma segura
-        this.cerrarModal('addRepuestoModal');
-        
-        // Asegurarse de limpiar la UI en caso de problemas
-        window.limpiarUIBloqueada();
         
         // Limpiar formulario
         const form = document.getElementById('addRepuestoForm');
@@ -704,7 +695,7 @@ limpiarUIBloqueada() {
         console.error('Error al guardar repuesto:', error);
         
         // Limpiar UI en caso de error
-        window.limpiarUIBloqueada();
+        ModalManager.cleanUI();
         
         if (typeof Swal !== 'undefined') {
             Swal.fire({
@@ -715,6 +706,61 @@ limpiarUIBloqueada() {
             });
         } else {
             alert('Error al guardar el repuesto: ' + (error.message || ''));
+        }
+    }
+}
+Paso 5: Modificar la función cargarRepuestosMasivo() en repuestos.js
+javascriptasync cargarRepuestosMasivo() {
+    if (!this.datosTemporales || this.datosTemporales.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', 'No hay datos para cargar', 'error');
+        } else {
+            alert('No hay datos para cargar');
+        }
+        return;
+    }
+    
+    try {
+        // Verificar que firebase esté inicializado
+        if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+            throw new Error('Firebase no está disponible');
+        }
+        
+        const totalRegistros = this.datosTemporales.length;
+        const batchSize = 500; // Procesar en lotes de 500
+        let procesados = 0;
+        let actualizados = 0;
+        let nuevos = 0;
+        
+        // Mostrar indicador de progreso
+        let progressSwal;
+        if (typeof Swal !== 'undefined') {
+            progressSwal = Swal.fire({
+                title: 'Analizando repuestos...',
+                html: `Preparando datos...`,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        }
+        
+        // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+        this.cerrarModal('uploadModal');
+        
+        // Resto del código para cargar repuestos
+        // ...
+        
+    } catch (error) {
+        console.error('Error en carga masiva:', error);
+        
+        // Limpiar UI en caso de error
+        ModalManager.cleanUI();
+        
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
+        } else {
+            alert(`Error en carga masiva: ${error.message}`);
         }
     }
 },
