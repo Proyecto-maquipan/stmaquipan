@@ -25,11 +25,20 @@ const ModalManager = {
         document.addEventListener('hide.bs.modal', this.handleModalHide.bind(this));
         document.addEventListener('hidden.bs.modal', this.handleModalHidden.bind(this));
         
-        // Interceptar clics en botones que abren modales
-        document.addEventListener('click', this.handleModalTriggerClick.bind(this));
-        
-        // Agregar botón de recuperación de emergencia (oculto inicialmente)
-        this.createEmergencyButton();
+        // MODIFICACIÓN CLAVE: Interceptar todos los clics en elementos con data-bs-toggle="modal"
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-bs-toggle="modal"]');
+            if (target) {
+                event.preventDefault(); // Prevenir comportamiento por defecto de Bootstrap
+                
+                // Obtener el ID del modal a abrir desde data-bs-target
+                const modalSelector = target.getAttribute('data-bs-target');
+                if (modalSelector) {
+                    const modalId = modalSelector.replace('#', '');
+                    this.open(modalId);
+                }
+            }
+        });
         
         // Iniciar monitoreo de UI bloqueada
         this.startBlockDetection();
@@ -40,6 +49,9 @@ const ModalManager = {
                 this.showEmergencyButton();
             }
         });
+        
+        // Crear botón de recuperación de emergencia (oculto inicialmente)
+        this.createEmergencyButton();
     },
     
     /**
