@@ -25,10 +25,10 @@ const clientesComponent = {
                             </div>
                         </div>
                         <div class="col-md-8 text-end">
-                            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addClienteModal">
+                            <button class="btn btn-primary me-2" onclick="clientesComponent.abrirModalAgregarCliente()">
                                 <i class="fas fa-plus me-2"></i>Agregar Cliente
                             </button>
-                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <button class="btn btn-success" onclick="clientesComponent.abrirModalCargaMasiva()">
                                 <i class="fas fa-upload me-2"></i>Carga Masiva
                             </button>
                         </div>
@@ -69,7 +69,7 @@ const clientesComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Agregar Nuevo Cliente</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="ModalManager.close('addClienteModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="addClienteForm">
@@ -113,7 +113,7 @@ const clientesComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('addClienteModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="clientesComponent.guardarCliente()">Guardar</button>
                             </div>
                         </div>
@@ -126,7 +126,7 @@ const clientesComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Carga Masiva de Clientes</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="ModalManager.close('uploadModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <div class="alert alert-info">
@@ -160,7 +160,7 @@ const clientesComponent = {
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('uploadModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="clientesComponent.cargarClientesMasivo()" disabled id="uploadBtn">Cargar Datos</button>
                             </div>
                         </div>
@@ -202,6 +202,38 @@ const clientesComponent = {
                 </div>
             `;
         }
+    },
+    
+    // Métodos para manejar modales
+    abrirModalAgregarCliente() {
+        // Limpiar el formulario
+        const form = document.getElementById('addClienteForm');
+        if (form) {
+            form.reset();
+        }
+        ModalManager.open('addClienteModal');
+    },
+    
+    abrirModalCargaMasiva() {
+        // Limpiar el área de preview
+        const previewArea = document.getElementById('previewArea');
+        if (previewArea) {
+            previewArea.style.display = 'none';
+        }
+        
+        // Limpiar el input de archivo
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        
+        // Deshabilitar el botón de carga
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) {
+            uploadBtn.disabled = true;
+        }
+        
+        ModalManager.open('uploadModal');
     },
     
     agregarEstilos() {
@@ -398,7 +430,7 @@ const clientesComponent = {
             try {
                 // Agregar tiempo de espera máximo
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Tiempo de espera agotado al verificar RUT')), 8000)
+                    setTimeout(() => reject(new Error('Tiempo de espera agotado')), 8000)
                 );
                 
                 // Intentar obtener clientes con storage primero
@@ -475,33 +507,13 @@ const clientesComponent = {
                     throw new Error('No hay método disponible para guardar');
                 }
                 
-                // Cerrar modal y resetear formulario
-                try {
-                    const modalElement = document.getElementById('addClienteModal');
-                    if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement);
-                        if (modal) {
-                            modal.hide();
-                        } else {
-                            // Fallback si no se puede obtener la instancia
-                            modalElement.style.display = 'none';
-                            modalElement.classList.remove('show');
-                            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                            document.body.classList.remove('modal-open');
-                            document.body.style.overflow = '';
-                        }
-                    }
-                    
-                    const form = document.getElementById('addClienteForm');
-                    if (form) {
-                        form.reset();
-                    }
-                } catch (modalError) {
-                    console.error('Error al cerrar modal:', modalError);
-                    // Limpiar manualmente
-                    document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                    document.body.classList.remove('modal-open');
-                    document.body.style.overflow = '';
+                // Cerrar modal
+                ModalManager.close('addClienteModal');
+                
+                // Resetear formulario
+                const form = document.getElementById('addClienteForm');
+                if (form) {
+                    form.reset();
                 }
                 
                 if (loadingSwal) {
@@ -531,9 +543,7 @@ const clientesComponent = {
                 }
                 
                 // Limpiar manualmente en caso de error
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
+                ModalManager.cleanUI();
             }
         } catch (error) {
             console.error('Error al procesar guardado de cliente:', error);
@@ -545,9 +555,7 @@ const clientesComponent = {
             }
             
             // Limpiar manualmente en caso de error global
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
+            ModalManager.cleanUI();
         }
     },
     
@@ -773,6 +781,9 @@ const clientesComponent = {
                 });
             }
             
+            // MODIFICADO: Cerrar modal usando ModalManager
+            ModalManager.close('uploadModal');
+            
             // Obtener clientes existentes para verificar RUTs duplicados
             let clientesExistentes = [];
             try {
@@ -912,29 +923,8 @@ const clientesComponent = {
                 }
             }
             
-            // Cerrar modal
-            try {
-                const modalElement = document.getElementById('uploadModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    } else {
-                        // Fallback si no se puede obtener la instancia
-                        modalElement.style.display = 'none';
-                        modalElement.classList.remove('show');
-                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = '';
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar manualmente
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-            }
+            // Cerrar modal y limpiar el UI
+            ModalManager.cleanUI();
             
             if (progressSwal) {
                 progressSwal.close();
@@ -976,9 +966,8 @@ const clientesComponent = {
             console.error('Error en carga masiva:', error);
             
             // Limpiar manualmente en caso de error
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
+            // MODIFICADO: Usar ModalManager para limpiar el UI
+            ModalManager.cleanUI();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', `No se pudieron cargar los clientes: ${error.message}`, 'error');
@@ -1172,7 +1161,7 @@ const clientesComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Editar Cliente</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="ModalManager.close('editClienteModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="editClienteForm">
@@ -1216,7 +1205,7 @@ const clientesComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('editClienteModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="clientesComponent.actualizarCliente('${cliente.id}')">Guardar Cambios</button>
                             </div>
                         </div>
@@ -1234,28 +1223,15 @@ const clientesComponent = {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
             // Mostrar modal
-            try {
-                const modalElement = document.getElementById('editClienteModal');
-                if (modalElement) {
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                }
-            } catch (modalError) {
-                console.error('Error al mostrar modal:', modalError);
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
-                } else {
-                    alert('Error al mostrar el formulario de edición');
-                }
-            }
+            // MODIFICADO: Usar ModalManager para abrir el modal
+            ModalManager.open('editClienteModal');
             
         } catch (error) {
             console.error('Error al editar cliente:', error);
-            
             if (typeof Swal !== 'undefined') {
-                Swal.fire('Error', 'No se pudo cargar el cliente para editar: ' + (error.message || ''), 'error');
+                Swal.fire('Error', 'No se pudo cargar el cliente para editar', 'error');
             } else {
-                alert('Error al cargar el cliente para editar: ' + (error.message || ''));
+                alert('Error al mostrar el formulario de edición');
             }
         }
     },
@@ -1379,28 +1355,8 @@ const clientesComponent = {
             }
             
             // Cerrar modal
-            try {
-                const modalElement = document.getElementById('editClienteModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    } else {
-                        // Fallback si no se puede obtener la instancia
-                        modalElement.style.display = 'none';
-                        modalElement.classList.remove('show');
-                        document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = '';
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar manualmente
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-            }
+            // MODIFICADO: Usar ModalManager para cerrar el modal
+            ModalManager.close('editClienteModal');
             
             if (loadingSwal) {
                 loadingSwal.close();
@@ -1418,10 +1374,9 @@ const clientesComponent = {
         } catch (error) {
             console.error('Error al actualizar cliente:', error);
             
-            // Limpiar manualmente en caso de error
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
+            // Limpiar UI en caso de error
+            // MODIFICADO: Usar ModalManager para limpiar el UI
+            ModalManager.cleanUI();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo actualizar el cliente: ' + (error.message || ''), 'error');
