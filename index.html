@@ -65,11 +65,11 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-<!-- Librería para generar PDFs - DEBE IR ANTES DE TUS SCRIPTS -->
+<!-- Librería para generar PDFs -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-<!-- NUEVO: Sistema de gestión de modales -->
-<script src="js/modal-manager.js"></script>
+<!-- NUEVO: Sistema de gestión de modales mejorado -->
+<script src="js/modal-manager-improved.js"></script>
 
 <!-- Tus scripts en el orden correcto -->
 <script src="js/services/firebase-config.js"></script>
@@ -92,254 +92,48 @@
     <!-- Opcional: Agregar un favicon para evitar errores 404 -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
 
-    <!-- Sistema de recuperación de UI -->
-    <div id="emergencyReset" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999; display: none;">
-        <button onclick="window.emergencyResetUI()" class="btn btn-danger">
-            <i class="fas fa-exclamation-triangle"></i> Reiniciar UI
-        </button>
-    </div>
-
-    <!-- Script para recuperar UI bloqueada -->
+    <!-- Script de diagnóstico -->
     <script>
-    // Sistema de recuperación de UI bloqueada
-    (function() {
-        // Funciones globales para resetear la UI
-        window.emergencyResetUI = function() {
-            console.log('Ejecutando recuperación de emergencia de la UI');
-            
-            // Cerrar todos los modales
-            try {
-                var modals = document.querySelectorAll('.modal');
-                modals.forEach(function(modal) {
-                    try {
-                        if (typeof bootstrap !== 'undefined') {
-                            var modalInstance = bootstrap.Modal.getInstance(modal);
-                            if (modalInstance) {
-                                modalInstance.hide();
-                            }
-                        }
-                        // Fallback si bootstrap no está disponible
-                        modal.style.display = 'none';
-                        modal.classList.remove('show');
-                        modal.setAttribute('aria-hidden', 'true');
-                        modal.removeAttribute('aria-modal');
-                    } catch(e) {
-                        console.error('Error al cerrar modal:', e);
-                    }
-                });
-            
-                // Remover backdrops
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-            } catch(e) {
-                console.error('Error al limpiar modales:', e);
-            }
-            
-            // Ocultar botón de emergencia
-            document.getElementById('emergencyReset').style.display = 'none';
-            
-            // Recargar componente actual o ir al dashboard
-            if (typeof router !== 'undefined') {
-                try {
-                    const currentRoute = window.location.hash.slice(1) || 'dashboard';
-                    router.navigate(currentRoute);
-                } catch(e) {
-                    console.error('Error al navegar:', e);
-                    // Si falla la navegación, recargar la página como último recurso
-                    if (confirm('¿Deseas recargar la página completa?')) {
-                        window.location.reload();
-                    }
-                }
-            }
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Sistema cargado correctamente');
+        
+        // Verificar que todas las dependencias estén cargadas
+        const dependencias = {
+            'Bootstrap': typeof bootstrap !== 'undefined',
+            'Firebase': typeof firebase !== 'undefined',
+            'ModalManager': typeof ModalManager !== 'undefined',
+            'jsPDF': typeof window.jspdf !== 'undefined',
+            'SweetAlert2': typeof Swal !== 'undefined',
+            'SheetJS': typeof XLSX !== 'undefined'
         };
         
-        // Detectar posibles bloqueos de UI
-        let uiBlockDetector = {
-            lastActivity: Date.now(),
-            checkInterval: null,
-            
-            init: function() {
-                // Registrar interacciones del usuario
-                document.addEventListener('click', () => this.resetTimer());
-                document.addEventListener('mousemove', () => this.resetTimer());
-                document.addEventListener('keypress', () => this.resetTimer());
-                
-                // Detectar cuando se abre un modal
-                document.addEventListener('shown.bs.modal', () => {
-                    this.resetTimer();
-                    this.startMonitoring();
-                });
-                
-                // Detectar cuando se cierra un modal normalmente
-                document.addEventListener('hidden.bs.modal', () => {
-                    this.stopMonitoring();
-                });
-                
-                // Mostrar botón de emergencia con Ctrl+Alt+R
-                document.addEventListener('keydown', (e) => {
-                    if (e.ctrlKey && e.altKey && e.key === 'r') {
-                        document.getElementById('emergencyReset').style.display = 'block';
-                    }
-                });
-            },
-            
-            resetTimer: function() {
-                this.lastActivity = Date.now();
-            },
-            
-            startMonitoring: function() {
-                if (this.checkInterval) {
-                    clearInterval(this.checkInterval);
-                }
-                
-                this.checkInterval = setInterval(() => {
-                    // Si hay un modal visible y no ha habido actividad en 15 segundos
-                    const modalVisible = document.querySelector('.modal.show');
-                    if (modalVisible && (Date.now() - this.lastActivity > 15000)) {
-                        console.warn('Posible UI bloqueada detectada - Mostrando botón de emergencia');
-                        document.getElementById('emergencyReset').style.display = 'block';
-                    }
-                }, 5000); // Revisar cada 5 segundos
-            },
-            
-            stopMonitoring: function() {
-                if (this.checkInterval) {
-                    clearInterval(this.checkInterval);
-                    this.checkInterval = null;
-                }
-            }
+        console.table(dependencias);
+        
+        // Verificar componentes principales
+        const componentes = {
+            'Router': typeof router !== 'undefined',
+            'Auth': typeof auth !== 'undefined',
+            'Storage': typeof storage !== 'undefined'
         };
         
-        // Inicializar detector de bloqueos cuando el DOM esté listo
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => uiBlockDetector.init());
-        } else {
-            uiBlockDetector.init();
+        console.table(componentes);
+        
+        // Mostrar advertencia si faltan dependencias críticas
+        const faltantes = Object.entries(dependencias)
+            .filter(([_, loaded]) => !loaded)
+            .map(([name]) => name);
+            
+        if (faltantes.length > 0) {
+            console.warn('ADVERTENCIA: Las siguientes dependencias no están cargadas:', faltantes);
+            
+            // Mostrar alerta al usuario solo si faltan componentes críticos
+            if (!dependencias['Bootstrap'] || !dependencias['Firebase'] || !dependencias['ModalManager']) {
+                setTimeout(() => {
+                    alert('Algunas dependencias críticas no se han cargado correctamente. Es posible que el sistema no funcione como se espera. Por favor, recargue la página o contacte al administrador.');
+                }, 1000);
+            }
         }
-    })();
-    </script>
-
-    <!-- Sistema de gestión segura de modales para toda la aplicación -->
-    <script>
-    (function() {
-        // Función global para mostrar modales de forma segura
-        window.mostrarModalSeguro = function(modalId) {
-            try {
-                console.log('Mostrando modal de forma segura:', modalId);
-                
-                // Limpiar cualquier modal previo
-                window.limpiarUIBloqueada();
-                
-                const modalElement = document.getElementById(modalId);
-                if (!modalElement) {
-                    console.error(`Modal ${modalId} no encontrado`);
-                    return null;
-                }
-                
-                // Usar Bootstrap para mostrar el modal
-                const modal = new bootstrap.Modal(modalElement, {
-                    backdrop: 'static',
-                    keyboard: true
-                });
-                
-                modal.show();
-                return modal;
-            } catch (error) {
-                console.error('Error al mostrar modal:', error);
-                window.limpiarUIBloqueada();
-                return null;
-            }
-        };
-
-        // Función global para cerrar modales de forma segura
-        window.cerrarModalSeguro = function(modalId) {
-            try {
-                console.log('Cerrando modal:', modalId);
-                
-                const modalElement = document.getElementById(modalId);
-                if (!modalElement) {
-                    console.error(`Modal ${modalId} no encontrado`);
-                    return false;
-                }
-                
-                // Intentar obtener la instancia de Bootstrap
-                let modal = bootstrap.Modal.getInstance(modalElement);
-                
-                if (modal) {
-                    modal.hide();
-                } else {
-                    // Fallback si no se puede obtener la instancia
-                    modalElement.style.display = 'none';
-                    modalElement.classList.remove('show');
-                    window.limpiarUIBloqueada();
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('Error al cerrar modal:', error);
-                window.limpiarUIBloqueada();
-                return false;
-            }
-        };
-
-        // Función global para limpiar UI bloqueada
-        window.limpiarUIBloqueada = function() {
-            console.log('Limpiando UI bloqueada');
-            
-            // Cerrar todos los modales
-            document.querySelectorAll('.modal').forEach(modal => {
-                try {
-                    modal.style.display = 'none';
-                    modal.classList.remove('show');
-                    modal.setAttribute('aria-hidden', 'true');
-                    modal.removeAttribute('aria-modal');
-                } catch (e) {
-                    console.error('Error al cerrar modal:', e);
-                }
-            });
-            
-            // Remover backdrops
-            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-        };
-
-        // Interceptar eventos de clic para botones de modal
-        document.addEventListener('click', function(event) {
-            // Detectar botones que abren modales
-            const modalTrigger = event.target.closest('[data-bs-toggle="modal"]');
-            if (modalTrigger) {
-                event.preventDefault();
-                const targetModalId = modalTrigger.getAttribute('data-bs-target').replace('#', '');
-                window.mostrarModalSeguro(targetModalId);
-            }
-            
-            // Detectar botones que cierran modales
-            const closeButton = event.target.closest('[data-bs-dismiss="modal"]');
-            if (closeButton) {
-                event.preventDefault();
-                const modal = closeButton.closest('.modal');
-                if (modal) {
-                    window.cerrarModalSeguro(modal.id);
-                }
-            }
-        });
-
-        // Monitorear UI bloqueada automáticamente
-        setInterval(function() {
-            const modalBackdrops = document.querySelectorAll('.modal-backdrop');
-            const modalesActivos = document.querySelectorAll('.modal.show');
-            
-            // Si hay backdrops pero no hay modales activos, limpiar
-            if (modalBackdrops.length > 0 && modalesActivos.length === 0) {
-                console.log('UI bloqueada detectada - limpiando automáticamente');
-                window.limpiarUIBloqueada();
-            }
-        }, 3000);
-
-        console.log('Sistema de gestión segura de modales inicializado');
-    })();
+    });
     </script>
 </body>
 </html>
