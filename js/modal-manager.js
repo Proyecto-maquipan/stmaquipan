@@ -1,4 +1,4 @@
-// js/modal-manager-improved.js
+// js/modal-manager.js
 // Sistema mejorado de gestión de modales para Portal Maquipan
 
 /**
@@ -369,7 +369,7 @@ const ModalManager = {
 // Inicializar automáticamente cuando se cargue el DOM
 document.addEventListener('DOMContentLoaded', () => {
     ModalManager.init();
-    console.log('Sistema de gestión de modales mejorado inicializado');
+    console.log('Sistema de gestión de modales inicializado');
 });
 
 // Hacer disponible globalmente
