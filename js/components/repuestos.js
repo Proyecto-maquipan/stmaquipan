@@ -136,7 +136,6 @@ const repuestosComponent = {
                         </div>
                     </div>
                 </div>
-
                 <!-- Modal para carga masiva -->
                 <div class="modal fade" id="uploadModal" tabindex="-1">
                     <div class="modal-dialog modal-lg">
@@ -224,6 +223,496 @@ const repuestosComponent = {
         }
     },
     
+    // Métodos seguros para manipular modales
+    // Utilizan el ModalManager mejorado
+    abrirModalAgregarRepuesto() {
+        // Limpiar el formulario antes de abrirlo
+        const form = document.getElementById('addRepuestoForm');
+        if (form) {
+            form.reset();
+        }
+        ModalManager.open('addRepuestoModal');
+    },
+
+    abrirModalCargaMasiva() {
+        // Restablecer el área de vista previa
+        const previewArea = document.getElementById('previewArea');
+        if (previewArea) {
+            previewArea.style.display = 'none';
+        }
+        
+        // Limpiar el input de archivo
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        
+        // Deshabilitar el botón de carga
+        const uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) {
+            uploadBtn.disabled = true;
+        }
+        
+        ModalManager.open('uploadModal');
+    },
+
+    cerrarModal(modalId) {
+        ModalManager.close(modalId);
+    },
+
+    agregarEstilos() {
+        if (!document.getElementById('repuestos-styles')) {
+            const style = document.createElement('style');
+            style.id = 'repuestos-styles';
+            style.textContent = `
+                .file-upload-area {
+                    border: 2px dashed #ddd;
+                    border-radius: 10px;
+                    padding: 20px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                .file-upload-area:hover {
+                    border-color: #007bff;
+                    background-color: #f8f9fa;
+                }
+                .btn-action {
+                    padding: 0.25rem 0.5rem;
+                    margin: 0 0.25rem;
+                }
+                .table-responsive {
+                    min-height: 400px;
+                }
+                #repuestosTableBody {
+                    min-height: 350px;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    },
+
+    async contarTotalRepuestos() {
+        try {
+            // Agregar tiempo de espera máximo para evitar bloqueos
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
+            const fetchPromise = firebase.firestore().collection('repuestos').get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
+            
+            this.totalItems = snapshot.size;
+            const totalElement = document.getElementById('totalRepuestos');
+            if (totalElement) {
+                totalElement.textContent = this.totalItems.toLocaleString();
+            }
+        } catch (error) {
+            console.error('Error contando repuestos:', error);
+            const totalElement = document.getElementById('totalRepuestos');
+            if (totalElement) {
+                totalElement.textContent = 'Error al cargar';
+            }
+        }
+    },
+
+    async cargarRepuestosPaginados(page = 1) {
+        try {
+            const tbody = document.getElementById('repuestosTableBody');
+            if (!tbody) {
+                console.error('Elemento tbody no encontrado');
+                return;
+            }
+            
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            let query = firebase.firestore().collection('repuestos')
+                .orderBy(this.ordenamiento, this.direccionOrden)
+                .limit(this.itemsPerPage);
+            
+            // Si no es la primera página, usar el último documento visible
+            if (page > 1 && this.lastVisible) {
+                query = query.startAfter(this.lastVisible);
+            }
+            
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
+            const fetchPromise = query.get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
+            
+            // Guardar el último documento para la siguiente página
+            if (!snapshot.empty) {
+                this.lastVisible = snapshot.docs[snapshot.docs.length - 1];
+            }
+            
+            // Renderizar datos
+            tbody.innerHTML = '';
+            
+            if (snapshot.empty) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron repuestos</td></tr>';
+                return;
+            }
+            
+            snapshot.forEach(doc => {
+                const repuesto = doc.data();
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${repuesto.codigo || ''}</td>
+                        <td>${repuesto.nombre || ''}</td>
+                        <td>$${(repuesto.precio || 0).toFixed(2)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${doc.id}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger btn-action" onclick="repuestosComponent.eliminarRepuesto('${doc.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            this.currentPage = page;
+            this.actualizarPaginacion();
+            } catch (error) {
+            console.error('Error al cargar repuestos paginados:', error);
+            
+            const tbody = document.getElementById('repuestosTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center">
+                            Error al cargar los repuestos. <button onclick="repuestosComponent.cargarRepuestosPaginados()" class="btn btn-sm btn-primary">Reintentar</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'No se pudieron cargar los repuestos. ¿Deseas reintentar?',
+                    icon: 'error',
+                    showCancelButton: true,
+                    confirmButtonText: 'Reintentar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargarRepuestosPaginados();
+                    }
+                });
+            }
+        }
+    },
+
+    cambiarOrdenamiento() {
+        const ordenamientoSelect = document.getElementById('ordenamiento');
+        if (!ordenamientoSelect) return;
+        
+        const [campo, direccion] = ordenamientoSelect.value.split('-');
+        
+        this.ordenamiento = campo;
+        this.direccionOrden = direccion;
+        this.currentPage = 1;
+        this.lastVisible = null;
+        
+        this.cargarRepuestosPaginados();
+    },
+
+    actualizarPaginacion() {
+        const totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
+        const pagination = document.getElementById('pagination');
+        if (!pagination) return;
+        
+        pagination.innerHTML = '';
+        
+        // Botón anterior
+        pagination.innerHTML += `
+            <li class="page-item ${this.currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); repuestosComponent.cambiarPagina(${this.currentPage - 1}); return false;">Anterior</a>
+            </li>
+        `;
+        
+        // Páginas
+        let startPage = Math.max(1, this.currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+        
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            pagination.innerHTML += `
+                <li class="page-item ${i === this.currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); repuestosComponent.cambiarPagina(${i}); return false;">${i}</a>
+                </li>
+            `;
+        }
+        
+        // Botón siguiente
+        pagination.innerHTML += `
+            <li class="page-item ${this.currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); repuestosComponent.cambiarPagina(${this.currentPage + 1}); return false;">Siguiente</a>
+            </li>
+        `;
+    },
+
+    cambiarPagina(page) {
+        if (page < 1 || page > Math.ceil(this.totalItems / this.itemsPerPage)) return;
+        this.cargarRepuestosPaginados(page);
+    },
+
+    cambiarItemsPorPagina(value) {
+        this.itemsPerPage = parseInt(value);
+        this.currentPage = 1;
+        this.lastVisible = null;
+        this.cargarRepuestosPaginados();
+    },
+
+    async buscarRepuestos() {
+        const searchTerm = document.getElementById('searchInput')?.value?.trim()?.toLowerCase() || '';
+        
+        if (searchTerm === '') {
+            // Si no hay término de búsqueda, volver a la vista normal
+            this.currentPage = 1;
+            this.lastVisible = null;
+            this.cargarRepuestosPaginados();
+            return;
+        }
+        
+        try {
+            const tbody = document.getElementById('repuestosTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</td></tr>';
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 15000)
+            );
+            
+            // Buscar por código exacto primero
+            const queryPromise = firebase.firestore().collection('repuestos')
+                .where('codigo', '==', searchTerm.toUpperCase())
+                .limit(50)
+                .get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const snapshot = await Promise.race([queryPromise, timeoutPromise]);
+            
+            // Si no se encuentra por código, buscar en nombre
+            if (snapshot.empty) {
+                // Firebase no soporta búsquedas de texto completo, así que necesitamos obtener todos los documentos
+                // y filtrar en el cliente. Para optimizar, limitamos la búsqueda.
+                const allSnapshotPromise = firebase.firestore().collection('repuestos')
+                    .orderBy('nombre')
+                    .limit(500) // Limitar a 500 para evitar problemas de rendimiento
+                    .get();
+                
+                const allSnapshot = await Promise.race([allSnapshotPromise, timeoutPromise]);
+                
+                const results = [];
+                allSnapshot.forEach(doc => {
+                    const repuesto = doc.data();
+                    const nombre = (repuesto.nombre || '').toLowerCase();
+                    const codigo = (repuesto.codigo || '').toLowerCase();
+                    
+                    if (nombre.includes(searchTerm) || codigo.includes(searchTerm)) {
+                        results.push({ id: doc.id, ...repuesto });
+                    }
+                });
+                
+                // Limitar a los primeros 50 resultados
+                const limitedResults = results.slice(0, 50);
+                
+                tbody.innerHTML = '';
+                
+                if (limitedResults.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron resultados</td></tr>';
+                    return;
+                }
+                
+                limitedResults.forEach(repuesto => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${repuesto.codigo || ''}</td>
+                            <td>${repuesto.nombre || ''}</td>
+                            <td>$${(repuesto.precio || 0).toFixed(2)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${repuesto.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-action" onclick="repuestosComponent.eliminarRepuesto('${repuesto.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                // Deshabilitar paginación durante búsqueda
+                const pagination = document.getElementById('pagination');
+                if (pagination) {
+                    pagination.innerHTML = '';
+                }
+            } else {
+                // Mostrar resultados de búsqueda por código
+                tbody.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const repuesto = doc.data();
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${repuesto.codigo || ''}</td>
+                            <td>${repuesto.nombre || ''}</td>
+                            <td>$${(repuesto.precio || 0).toFixed(2)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${doc.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-action" onclick="repuestosComponent.eliminarRepuesto('${doc.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                // Deshabilitar paginación durante búsqueda
+                const pagination = document.getElementById('pagination');
+                if (pagination) {
+                    pagination.innerHTML = '';
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error en búsqueda:', error);
+            
+            const tbody = document.getElementById('repuestosTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center">
+                            Error al realizar la búsqueda. <button onclick="repuestosComponent.buscarRepuestos()" class="btn btn-sm btn-primary">Reintentar</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Error al realizar la búsqueda: ' + (error.message || ''), 'error');
+            }
+        }
+    },
+    
+    async guardarRepuesto() {
+        try {
+            const codigo = document.getElementById('codigo')?.value;
+            const nombre = document.getElementById('nombre')?.value;
+            const precioElement = document.getElementById('precio');
+            const precio = precioElement ? parseFloat(precioElement.value) : 0;
+            
+            if (!codigo || !nombre || isNaN(precio)) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Todos los campos son requeridos y el precio debe ser un número', 'error');
+                } else {
+                    alert('Todos los campos son requeridos y el precio debe ser un número');
+                }
+                return;
+            }
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Guardando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            this.cerrarModal('addRepuestoModal');
+            
+            // Guardar en Firebase
+            await firebase.firestore().collection('repuestos').add({
+                codigo: codigo.trim().toUpperCase(),
+                nombre: nombre.trim(),
+                precio,
+                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Limpiar formulario
+            const form = document.getElementById('addRepuestoForm');
+            if (form) {
+                form.reset();
+            }
+            
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Éxito',
+                    text: 'Repuesto agregado correctamente',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                alert('Repuesto agregado correctamente');
+            }
+            
+            // Actualizar contador y recargar
+            await this.contarTotalRepuestos();
+            this.currentPage = 1;
+            this.lastVisible = null;
+            await this.cargarRepuestosPaginados();
+            
+        } catch (error) {
+            console.error('Error al guardar repuesto:', error);
+            
+            // Limpiar UI en caso de error
+            ModalManager.cleanUI();
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'No se pudo guardar el repuesto. ' + (error.message || ''),
+                    icon: 'error',
+                    confirmButtonText: 'Aceptar'
+                });
+            } else {
+                alert('Error al guardar el repuesto: ' + (error.message || ''));
+            }
+        }
+    },
+
     async eliminarRepuesto(id) {
         if (!id) return;
         
@@ -616,7 +1105,7 @@ const repuestosComponent = {
                 <tr>
                     <td>${item.codigo}</td>
                     <td>${item.nombre}</td>
-                    <td>${item.precio.toFixed(2)}</td>
+                    <td>$${item.precio.toFixed(2)}</td>
                 </tr>
             `;
         });
@@ -845,259 +1334,3 @@ const repuestosComponent = {
         }
     }
 };
-
-    async guardarRepuesto() {
-        try {
-            const codigo = document.getElementById('codigo')?.value;
-            const nombre = document.getElementById('nombre')?.value;
-            const precioElement = document.getElementById('precio');
-            const precio = precioElement ? parseFloat(precioElement.value) : 0;
-            
-            if (!codigo || !nombre || isNaN(precio)) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Error', 'Todos los campos son requeridos y el precio debe ser un número', 'error');
-                } else {
-                    alert('Todos los campos son requeridos y el precio debe ser un número');
-                }
-                return;
-            }
-            
-            // Verificar que firebase esté inicializado
-            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
-                throw new Error('Firebase no está disponible');
-            }
-            
-            // Mostrar indicador de carga
-            let loadingSwal;
-            if (typeof Swal !== 'undefined') {
-                loadingSwal = Swal.fire({
-                    title: 'Guardando...',
-                    text: 'Espere por favor',
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
-            }
-            
-            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
-            this.cerrarModal('addRepuestoModal');
-            
-            // Guardar en Firebase
-            await firebase.firestore().collection('repuestos').add({
-                codigo: codigo.trim().toUpperCase(),
-                nombre: nombre.trim(),
-                precio,
-                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            // Limpiar formulario
-            const form = document.getElementById('addRepuestoForm');
-            if (form) {
-                form.reset();
-            }
-            
-            if (loadingSwal) {
-                loadingSwal.close();
-            }
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: 'Éxito',
-                    text: 'Repuesto agregado correctamente',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                alert('Repuesto agregado correctamente');
-            }
-            
-            // Actualizar contador y recargar
-            await this.contarTotalRepuestos();
-            this.currentPage = 1;
-            this.lastVisible = null;
-            await this.cargarRepuestosPaginados();
-            
-        } catch (error) {
-            console.error('Error al guardar repuesto:', error);
-            
-            // Limpiar UI en caso de error
-            ModalManager.cleanUI();
-            
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'No se pudo guardar el repuesto. ' + (error.message || ''),
-                    icon: 'error',
-                    confirmButtonText: 'Aceptar'
-                });
-            } else {
-                alert('Error al guardar el repuesto: ' + (error.message || ''));
-            }
-        }
-    },
-
-    // Métodos seguros para manipular modales
-    // Ahora utilizan el ModalManager mejorado
-    abrirModalAgregarRepuesto() {
-        // Limpiar el formulario antes de abrirlo
-        const form = document.getElementById('addRepuestoForm');
-        if (form) {
-            form.reset();
-        }
-        ModalManager.open('addRepuestoModal');
-    },
-
-    abrirModalCargaMasiva() {
-        // Restablecer el área de vista previa
-        const previewArea = document.getElementById('previewArea');
-        if (previewArea) {
-            previewArea.style.display = 'none';
-        }
-        
-        // Limpiar el input de archivo
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) {
-            fileInput.value = '';
-        }
-        
-        // Deshabilitar el botón de carga
-        const uploadBtn = document.getElementById('uploadBtn');
-        if (uploadBtn) {
-            uploadBtn.disabled = true;
-        }
-        
-        ModalManager.open('uploadModal');
-    },
-
-    cerrarModal(modalId) {
-        ModalManager.close(modalId);
-    },
-
-    agregarEstilos() {
-        if (!document.getElementById('repuestos-styles')) {
-            const style = document.createElement('style');
-            style.id = 'repuestos-styles';
-            style.textContent = `
-                .file-upload-area {
-                    border: 2px dashed #ddd;
-                    border-radius: 10px;
-                    padding: 20px;
-                    text-align: center;
-                    cursor: pointer;
-                    transition: all 0.3s ease;
-                }
-                .file-upload-area:hover {
-                    border-color: #007bff;
-                    background-color: #f8f9fa;
-                }
-                .btn-action {
-                    padding: 0.25rem 0.5rem;
-                    margin: 0 0.25rem;
-                }
-                .table-responsive {
-                    min-height: 400px;
-                }
-                #repuestosTableBody {
-                    min-height: 350px;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-    },
-
-    async contarTotalRepuestos() {
-        try {
-            // Agregar tiempo de espera máximo para evitar bloqueos
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
-            );
-            
-            const fetchPromise = firebase.firestore().collection('repuestos').get();
-            
-            // Usar Promise.race para limitar el tiempo de espera
-            const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
-            
-            this.totalItems = snapshot.size;
-            const totalElement = document.getElementById('totalRepuestos');
-            if (totalElement) {
-                totalElement.textContent = this.totalItems.toLocaleString();
-            }
-        } catch (error) {
-            console.error('Error contando repuestos:', error);
-            const totalElement = document.getElementById('totalRepuestos');
-            if (totalElement) {
-                totalElement.textContent = 'Error al cargar';
-            }
-        }
-    },
-
-    async cargarRepuestosPaginados(page = 1) {
-        try {
-            const tbody = document.getElementById('repuestosTableBody');
-            if (!tbody) {
-                console.error('Elemento tbody no encontrado');
-                return;
-            }
-            
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
-            
-            // Verificar que firebase esté inicializado
-            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
-                throw new Error('Firebase no está disponible');
-            }
-            
-            let query = firebase.firestore().collection('repuestos')
-                .orderBy(this.ordenamiento, this.direccionOrden)
-                .limit(this.itemsPerPage);
-            
-            // Si no es la primera página, usar el último documento visible
-            if (page > 1 && this.lastVisible) {
-                query = query.startAfter(this.lastVisible);
-            }
-            
-            // Agregar tiempo de espera máximo
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
-            );
-            
-            const fetchPromise = query.get();
-            
-            // Usar Promise.race para limitar el tiempo de espera
-            const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
-            
-            // Guardar el último documento para la siguiente página
-            if (!snapshot.empty) {
-                this.lastVisible = snapshot.docs[snapshot.docs.length - 1];
-            }
-            
-            // Renderizar datos
-            tbody.innerHTML = '';
-            
-            if (snapshot.empty) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron repuestos</td></tr>';
-                return;
-            }
-            
-            snapshot.forEach(doc => {
-                const repuesto = doc.data();
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${repuesto.codigo || ''}</td>
-                        <td>${repuesto.nombre || ''}</td>
-                        <td>${(repuesto.precio || 0).toFixed(2)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${doc.id}')">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger btn-action" onclick="repuestosComponent.eliminarRepuesto('${doc.id}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            this.currentPage = page;
-            this.actualizarPaginacion();
