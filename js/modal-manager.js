@@ -1,10 +1,9 @@
-// js/modal-manager.js
+// modal-manager.js (versión modificada)
 // Sistema mejorado de gestión de modales para Portal Maquipan
 
 /**
  * ModalManager - Sistema centralizado para manejar modales en toda la aplicación
- * Mejora la gestión de modales de Bootstrap para evitar problemas con UI bloqueada,
- * backdrops huérfanos, y proporciona métodos de recuperación.
+ * Reemplaza completamente los modales de Bootstrap para evitar conflictos
  */
 const ModalManager = {
     // Registro de modales activos
@@ -17,28 +16,16 @@ const ModalManager = {
      * Inicializar el sistema de modales
      */
     init: function() {
-        console.log('Inicializando sistema de gestión de modales...');
+        console.log('Inicializando sistema de gestión de modales (reemplazo completo)...');
         
-        // Interceptar eventos de modal de Bootstrap
-        document.addEventListener('show.bs.modal', this.handleModalShow.bind(this));
-        document.addEventListener('shown.bs.modal', this.handleModalShown.bind(this));
-        document.addEventListener('hide.bs.modal', this.handleModalHide.bind(this));
-        document.addEventListener('hidden.bs.modal', this.handleModalHidden.bind(this));
+        // PASO 1: Desactivar completamente los modales de Bootstrap
+        this.disableBootstrapModals();
         
-        // MODIFICACIÓN CLAVE: Interceptar todos los clics en elementos con data-bs-toggle="modal"
-        document.addEventListener('click', (event) => {
-            const target = event.target.closest('[data-bs-toggle="modal"]');
-            if (target) {
-                event.preventDefault(); // Prevenir comportamiento por defecto de Bootstrap
-                
-                // Obtener el ID del modal a abrir desde data-bs-target
-                const modalSelector = target.getAttribute('data-bs-target');
-                if (modalSelector) {
-                    const modalId = modalSelector.replace('#', '');
-                    this.open(modalId);
-                }
-            }
-        });
+        // PASO 2: Reemplazar todos los eventos de modales de Bootstrap
+        this.replaceBootstrapModalEvents();
+        
+        // Crear botón de recuperación de emergencia
+        this.createEmergencyButton();
         
         // Iniciar monitoreo de UI bloqueada
         this.startBlockDetection();
@@ -49,9 +36,130 @@ const ModalManager = {
                 this.showEmergencyButton();
             }
         });
+    },
+    
+    /**
+     * Desactiva completamente los modales nativos de Bootstrap
+     */
+    disableBootstrapModals: function() {
+        // Sobrescribir el constructor de Modal de Bootstrap
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const originalModal = bootstrap.Modal;
+            
+            // Crear una versión dummy que no hace nada
+            bootstrap.Modal = function(element, options) {
+                console.log('Modal de Bootstrap interceptado:', element?.id);
+                return {
+                    _element: element,
+                    _config: options,
+                    show: function() {
+                        console.log('Intento de usar bootstrap.Modal.show() interceptado:', element?.id);
+                        // Redirigir a nuestro gestor
+                        if (element && element.id) {
+                            ModalManager.open(element.id);
+                        }
+                    },
+                    hide: function() {
+                        console.log('Intento de usar bootstrap.Modal.hide() interceptado:', element?.id);
+                        // Redirigir a nuestro gestor
+                        if (element && element.id) {
+                            ModalManager.close(element.id);
+                        }
+                    },
+                    toggle: function() {
+                        console.log('Intento de usar bootstrap.Modal.toggle() interceptado:', element?.id);
+                        // Redirigir a nuestro gestor
+                        if (element && element.id) {
+                            ModalManager.open(element.id);
+                        }
+                    },
+                    dispose: function() {
+                        console.log('Intento de usar bootstrap.Modal.dispose() interceptado');
+                    },
+                    handleUpdate: function() {
+                        console.log('Intento de usar bootstrap.Modal.handleUpdate() interceptado');
+                    }
+                };
+            };
+            
+            // Mantener el método getInstance pero redirigiéndolo a nuestro gestor
+            bootstrap.Modal.getInstance = function(element) {
+                console.log('bootstrap.Modal.getInstance interceptado:', element?.id);
+                return {
+                    show: function() {
+                        console.log('Intento de usar getInstance().show() interceptado:', element?.id);
+                        if (element && element.id) {
+                            ModalManager.open(element.id);
+                        }
+                    },
+                    hide: function() {
+                        console.log('Intento de usar getInstance().hide() interceptado:', element?.id);
+                        if (element && element.id) {
+                            ModalManager.close(element.id);
+                        }
+                    },
+                    toggle: function() {
+                        console.log('Intento de usar getInstance().toggle() interceptado:', element?.id);
+                        if (element && element.id) {
+                            ModalManager.open(element.id);
+                        }
+                    },
+                    dispose: function() {},
+                    handleUpdate: function() {}
+                };
+            };
+        }
+    },
+    
+    /**
+     * Reemplaza todos los eventos y disparadores de modales de Bootstrap
+     */
+    replaceBootstrapModalEvents: function() {
+        // 1. Interceptar clics en botones con data-bs-toggle="modal"
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-bs-toggle="modal"], [data-toggle="modal"]');
+            if (target) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Obtener el ID del modal
+                const targetSelector = target.getAttribute('data-bs-target') || target.getAttribute('data-target');
+                if (targetSelector) {
+                    const modalId = targetSelector.replace('#', '');
+                    this.open(modalId);
+                }
+            }
+        }, true); // Usar capturing para interceptar antes de que Bootstrap lo procese
         
-        // Crear botón de recuperación de emergencia (oculto inicialmente)
-        this.createEmergencyButton();
+        // 2. Interceptar todos los botones de cierre
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-bs-dismiss="modal"], [data-dismiss="modal"], .modal .btn-close, .modal .close');
+            if (target) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Encontrar el modal padre
+                const modalElement = target.closest('.modal');
+                if (modalElement && modalElement.id) {
+                    this.close(modalElement.id);
+                } else {
+                    // Si no se puede encontrar el ID, limpiar todos los modales
+                    this.cleanUI();
+                }
+            }
+        }, true); // Usar capturing para interceptar antes de que Bootstrap lo procese
+        
+        // 3. Interceptar clic en backdrop (fondo oscuro del modal)
+        document.addEventListener('click', (event) => {
+            if (event.target.classList.contains('modal') && event.target.classList.contains('show')) {
+                const modalId = event.target.id;
+                // Verificar si el modal permite cerrar con backdrop
+                const backdrop = event.target.getAttribute('data-bs-backdrop') || event.target.getAttribute('data-backdrop');
+                if (backdrop !== 'static') {
+                    this.close(modalId);
+                }
+            }
+        });
     },
     
     /**
@@ -70,61 +178,37 @@ const ModalManager = {
                 return false;
             }
             
-            // Intentar usar Bootstrap para abrir el modal
-            try {
-                // Primero verificar si hay una instancia existente
-                let modalInstance = bootstrap.Modal.getInstance(modalElement);
-                
-                // Si no existe, crear una nueva instancia
-                if (!modalInstance) {
-                    modalInstance = new bootstrap.Modal(modalElement, {
-                        backdrop: 'static',
-                        keyboard: true
-                    });
-                }
-                
-                // Registrar el modal como activo
-                this.activeModals.push({
-                    id: modalId,
-                    element: modalElement,
-                    instance: modalInstance,
-                    timestamp: Date.now()
-                });
-                
-                // Mostrar el modal
-                modalInstance.show();
-                return true;
-            } catch (bootstrapError) {
-                console.error('Error al usar Bootstrap para abrir modal:', bootstrapError);
-                
-                // Fallback manual si Bootstrap falla
-                this.cleanUI(); // Limpiar cualquier modal previo
-                
-                // Crear backdrop manualmente
-                const backdrop = document.createElement('div');
-                backdrop.className = 'modal-backdrop fade show';
-                backdrop.dataset.forModal = modalId;
-                document.body.appendChild(backdrop);
-                
-                // Mostrar el modal manualmente
-                modalElement.style.display = 'block';
-                modalElement.classList.add('show');
-                modalElement.setAttribute('aria-modal', 'true');
-                modalElement.removeAttribute('aria-hidden');
-                document.body.classList.add('modal-open');
-                document.body.style.overflow = 'hidden';
-                
-                // Registrar modal activo
-                this.activeModals.push({
-                    id: modalId,
-                    element: modalElement,
-                    instance: null, // No hay instancia de Bootstrap
-                    timestamp: Date.now(),
-                    manuallyOpened: true
-                });
-                
-                return true;
-            }
+            // Limpiar cualquier modal previo
+            this.cleanUI();
+            
+            // Crear backdrop manualmente
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            backdrop.dataset.forModal = modalId;
+            document.body.appendChild(backdrop);
+            
+            // Mostrar el modal manualmente
+            modalElement.style.display = 'block';
+            modalElement.classList.add('show');
+            modalElement.setAttribute('aria-modal', 'true');
+            modalElement.removeAttribute('aria-hidden');
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+            
+            // Registrar modal activo
+            this.activeModals.push({
+                id: modalId,
+                element: modalElement,
+                timestamp: Date.now()
+            });
+            
+            // Disparar evento personalizado para que los componentes puedan responder
+            const event = new CustomEvent('modal.shown', {
+                detail: { modalId: modalId }
+            });
+            modalElement.dispatchEvent(event);
+            
+            return true;
         } catch (error) {
             console.error('Error general al abrir modal:', error);
             this.cleanUI();
@@ -150,22 +234,15 @@ const ModalManager = {
             
             // Encontrar el modal en los activos
             const modalIndex = this.activeModals.findIndex(m => m.id === modalId);
-            const modalInfo = modalIndex >= 0 ? this.activeModals[modalIndex] : null;
             
-            // Intentar usar Bootstrap para cerrar el modal
-            if (modalInfo && modalInfo.instance) {
-                // Cerrar con instancia de Bootstrap
-                modalInfo.instance.hide();
-            } else {
-                // Cerrar manualmente
-                modalElement.style.display = 'none';
-                modalElement.classList.remove('show');
-                modalElement.setAttribute('aria-hidden', 'true');
-                modalElement.removeAttribute('aria-modal');
-                
-                // Eliminar backdrop específico de este modal
-                document.querySelectorAll(`.modal-backdrop[data-for-modal="${modalId}"]`).forEach(e => e.remove());
-            }
+            // Cerrar manualmente
+            modalElement.style.display = 'none';
+            modalElement.classList.remove('show');
+            modalElement.setAttribute('aria-hidden', 'true');
+            modalElement.removeAttribute('aria-modal');
+            
+            // Eliminar backdrop específico de este modal
+            document.querySelectorAll(`.modal-backdrop[data-for-modal="${modalId}"]`).forEach(e => e.remove());
             
             // Quitar de modales activos
             if (modalIndex >= 0) {
@@ -177,6 +254,12 @@ const ModalManager = {
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = '';
             }
+            
+            // Disparar evento personalizado para que los componentes puedan responder
+            const event = new CustomEvent('modal.hidden', {
+                detail: { modalId: modalId }
+            });
+            modalElement.dispatchEvent(event);
             
             return true;
         } catch (error) {
@@ -192,23 +275,11 @@ const ModalManager = {
     cleanUI: function() {
         console.log('Limpiando UI de modales');
         
-        // Capturar instancias de modales antes de limpiar
-        const modalInstancesToDestroy = [...this.activeModals];
+        // Capturar los modales activos antes de limpiar
+        const modalsToClose = [...this.activeModals];
         
         // Limpiar lista de modales activos
         this.activeModals = [];
-        
-        // Cerrar todos los modales de Bootstrap
-        modalInstancesToDestroy.forEach(modal => {
-            try {
-                if (modal.instance) {
-                    modal.instance.hide();
-                    // La instancia se limpiará automáticamente por el evento hidden.bs.modal
-                }
-            } catch (e) {
-                console.error('Error al cerrar modal con Bootstrap:', e);
-            }
-        });
         
         // Cerrar todos los modales manualmente
         document.querySelectorAll('.modal.show').forEach(modal => {
@@ -217,6 +288,12 @@ const ModalManager = {
                 modal.classList.remove('show');
                 modal.setAttribute('aria-hidden', 'true');
                 modal.removeAttribute('aria-modal');
+                
+                // Disparar evento personalizado
+                const event = new CustomEvent('modal.hidden', {
+                    detail: { modalId: modal.id }
+                });
+                modal.dispatchEvent(event);
             } catch (e) {
                 console.error('Error al cerrar modal manualmente:', e);
             }
@@ -293,95 +370,13 @@ const ModalManager = {
                 this.showEmergencyButton();
             }
         }, 5000);
-    },
-    
-    /**
-     * Maneja el evento de inicio de apertura de un modal
-     */
-    handleModalShow: function(event) {
-        const modalElement = event.target;
-        console.log('Evento show.bs.modal detectado:', modalElement.id);
-    },
-    
-    /**
-     * Maneja el evento cuando un modal se ha mostrado completamente
-     */
-    handleModalShown: function(event) {
-        const modalElement = event.target;
-        console.log('Evento shown.bs.modal detectado:', modalElement.id);
-        
-        // Actualizar o agregar el modal a la lista de activos
-        const modalIndex = this.activeModals.findIndex(m => m.id === modalElement.id);
-        const modalInstance = bootstrap.Modal.getInstance(modalElement);
-        
-        if (modalIndex >= 0) {
-            this.activeModals[modalIndex].instance = modalInstance;
-            this.activeModals[modalIndex].timestamp = Date.now();
-        } else {
-            this.activeModals.push({
-                id: modalElement.id,
-                element: modalElement,
-                instance: modalInstance,
-                timestamp: Date.now()
-            });
-        }
-    },
-    
-    /**
-     * Maneja el evento de inicio de cierre de un modal
-     */
-    handleModalHide: function(event) {
-        const modalElement = event.target;
-        console.log('Evento hide.bs.modal detectado:', modalElement.id);
-    },
-    
-    /**
-     * Maneja el evento cuando un modal se ha ocultado completamente
-     */
-    handleModalHidden: function(event) {
-        const modalElement = event.target;
-        console.log('Evento hidden.bs.modal detectado:', modalElement.id);
-        
-        // Remover de la lista de modales activos
-        const modalIndex = this.activeModals.findIndex(m => m.id === modalElement.id);
-        if (modalIndex >= 0) {
-            this.activeModals.splice(modalIndex, 1);
-        }
-        
-        // Si no quedan modales activos, restaurar el body
-        if (this.activeModals.length === 0) {
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-        }
-    },
-    
-    /**
-     * Maneja clics en elementos que abren modales
-     */
-    handleModalTriggerClick: function(event) {
-        // Buscar si el clic fue en un botón que abre modal
-        const trigger = event.target.closest('[data-bs-toggle="modal"]');
-        if (!trigger) return;
-        
-        // Prevenir comportamiento por defecto
-        event.preventDefault();
-        
-        // Obtener el ID del modal a abrir
-        const targetModalId = trigger.getAttribute('data-bs-target');
-        if (!targetModalId) return;
-        
-        // Extraer solo el ID sin # si existe
-        const modalId = targetModalId.startsWith('#') ? targetModalId.substring(1) : targetModalId;
-        
-        // Abrir el modal de forma segura
-        this.open(modalId);
     }
 };
 
 // Inicializar automáticamente cuando se cargue el DOM
 document.addEventListener('DOMContentLoaded', () => {
     ModalManager.init();
-    console.log('Sistema de gestión de modales inicializado');
+    console.log('Sistema de gestión de modales inicializado (reemplazo completo)');
 });
 
 // Hacer disponible globalmente
