@@ -111,7 +111,7 @@ const repuestosComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Agregar Nuevo Repuesto</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="ModalManager.close('addRepuestoModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="addRepuestoForm">
@@ -130,7 +130,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('addRepuestoModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.guardarRepuesto()">Guardar</button>
                             </div>
                         </div>
@@ -142,7 +142,7 @@ const repuestosComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Carga Masiva de Repuestos</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="ModalManager.close('uploadModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <div class="alert alert-info">
@@ -172,7 +172,7 @@ const repuestosComponent = {
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('uploadModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.cargarRepuestosMasivo()" disabled id="uploadBtn">Cargar Datos</button>
                             </div>
                         </div>
@@ -656,7 +656,8 @@ const repuestosComponent = {
             }
             
             // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
-            this.cerrarModal('addRepuestoModal');
+            // MODIFICADO: Usar ModalManager para cerrar modal
+            ModalManager.close('addRepuestoModal');
             
             // Guardar en Firebase
             await firebase.firestore().collection('repuestos').add({
@@ -698,6 +699,7 @@ const repuestosComponent = {
             console.error('Error al guardar repuesto:', error);
             
             // Limpiar UI en caso de error
+            // MODIFICADO: Usar ModalManager para limpiar UI
             ModalManager.cleanUI();
             
             if (typeof Swal !== 'undefined') {
@@ -851,7 +853,7 @@ const repuestosComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Editar Repuesto</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="ModalManager.close('editRepuestoModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="editRepuestoForm">
@@ -870,7 +872,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('editRepuestoModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.actualizarRepuesto('${id}')">Actualizar</button>
                             </div>
                         </div>
@@ -941,6 +943,7 @@ const repuestosComponent = {
             }
             
             // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            // MODIFICADO: Usar ModalManager para cerrar modal
             ModalManager.close('editRepuestoModal');
             
             // Actualizar en Firebase
@@ -974,6 +977,7 @@ const repuestosComponent = {
             console.error('Error al actualizar repuesto:', error);
             
             // Limpiar UI en caso de error
+            // MODIFICADO: Usar ModalManager para limpiar UI
             ModalManager.cleanUI();
             
             if (typeof Swal !== 'undefined') {
@@ -1158,6 +1162,7 @@ const repuestosComponent = {
             }
             
             // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            // MODIFICADO: Usar ModalManager para cerrar modal
             ModalManager.close('uploadModal');
             
             // Primero, obtener todos los códigos de repuestos existentes
@@ -1267,6 +1272,7 @@ const repuestosComponent = {
             console.error('Error en carga masiva:', error);
             
             // Limpiar UI en caso de error
+            // MODIFICADO: Usar ModalManager para limpiar UI
             ModalManager.cleanUI();
             
             if (typeof Swal !== 'undefined') {
