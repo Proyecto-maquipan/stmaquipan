@@ -1,4 +1,4 @@
-// Componente de Gestión de Repuestos - Versión Optimizada con Ordenamiento por Nombre
+// Componente de Gestión de Repuestos - Versión con Bootstrap para modales
 const repuestosComponent = {
     datosTemporales: [],
     currentPage: 1,
@@ -41,10 +41,10 @@ const repuestosComponent = {
                             </select>
                         </div>
                         <div class="col-md-6 text-end">
-                            <button class="btn btn-primary me-2" onclick="repuestosComponent.abrirModalAgregarRepuesto()">
+                            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addRepuestoModal">
                                 <i class="fas fa-plus me-2"></i>Agregar Repuesto
                             </button>
-                            <button class="btn btn-success" onclick="repuestosComponent.abrirModalCargaMasiva()">
+                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
                                 <i class="fas fa-upload me-2"></i>Carga Masiva
                             </button>
                         </div>
@@ -165,7 +165,7 @@ const repuestosComponent = {
                                                     <th>Precio</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
+                                            <tbody id="previewTableBody">
                                                 <!-- Datos de preview -->
                                             </tbody>
                                         </table>
@@ -224,33 +224,18 @@ const repuestosComponent = {
         }
     },
 
-    // Función para abrir modal de agregar repuesto - ACTUALIZADA para usar Bootstrap directamente
-    abrirModalAgregarRepuesto() {
+    // Función para limpiar UI bloqueada - usada cuando hay problemas con modales
+    limpiarUIBloqueada() {
         try {
-            const modalElement = document.getElementById('addRepuestoModal');
-            if (modalElement) {
-                const modal = new bootstrap.Modal(modalElement);
-                modal.show();
-            }
+            // Remover backdrops
+            document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            return true;
         } catch (error) {
-            console.error('Error al abrir modal:', error);
-            // Si hay error, limpiar UI
-            window.resetUIState();
-        }
-    },
-
-    // Función para abrir modal de carga masiva - ACTUALIZADA para usar Bootstrap directamente
-    abrirModalCargaMasiva() {
-        try {
-            const modalElement = document.getElementById('uploadModal');
-            if (modalElement) {
-                const modal = new bootstrap.Modal(modalElement);
-                modal.show();
-            }
-        } catch (error) {
-            console.error('Error al abrir modal:', error);
-            // Si hay error, limpiar UI
-            window.resetUIState();
+            console.error('Error limpiando UI:', error);
+            return false;
         }
     },
 
@@ -427,6 +412,13 @@ const repuestosComponent = {
         this.cargarRepuestosPaginados();
     },
 
+    cambiarItemsPorPagina(value) {
+        this.itemsPerPage = parseInt(value);
+        this.currentPage = 1;
+        this.lastVisible = null;
+        this.cargarRepuestosPaginados();
+    },
+
     actualizarPaginacion() {
         const totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
         const pagination = document.getElementById('pagination');
@@ -468,13 +460,6 @@ const repuestosComponent = {
     cambiarPagina(page) {
         if (page < 1 || page > Math.ceil(this.totalItems / this.itemsPerPage)) return;
         this.cargarRepuestosPaginados(page);
-    },
-
-    cambiarItemsPorPagina(value) {
-        this.itemsPerPage = parseInt(value);
-        this.currentPage = 1;
-        this.lastVisible = null;
-        this.cargarRepuestosPaginados();
     },
 
     async buscarRepuestos() {
@@ -651,19 +636,17 @@ const repuestosComponent = {
                 });
             }
             
-            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            // CERRAR MODAL USANDO BOOTSTRAP
             try {
                 const modalElement = document.getElementById('addRepuestoModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    }
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
                 }
             } catch (modalError) {
                 console.error('Error al cerrar modal:', modalError);
-                // En caso de error, intentar limpiar manualmente
-                window.resetUIState();
+                // Si falla bootstrap, limpiar manualmente
+                this.limpiarUIBloqueada();
             }
             
             // Guardar en Firebase
@@ -710,7 +693,7 @@ const repuestosComponent = {
             console.error('Error al guardar repuesto:', error);
             
             // Limpiar UI en caso de error
-            window.resetUIState();
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -760,19 +743,17 @@ const repuestosComponent = {
                 });
             }
             
-            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            // CERRAR MODAL USANDO BOOTSTRAP
             try {
                 const modalElement = document.getElementById('uploadModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    }
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
                 }
             } catch (modalError) {
                 console.error('Error al cerrar modal:', modalError);
-                // En caso de error, intentar limpiar manualmente
-                window.resetUIState();
+                // Si falla bootstrap, limpiar manualmente
+                this.limpiarUIBloqueada();
             }
             
             // Primero, obtener todos los códigos de repuestos existentes
@@ -844,8 +825,8 @@ const repuestosComponent = {
                 }
             }
             
-            // Asegurarse de limpiar la UI
-            window.resetUIState();
+            // Limpiar UI en caso de modal bloqueado
+            this.limpiarUIBloqueada();
             
             if (progressSwal) {
                 progressSwal.close();
@@ -882,7 +863,7 @@ const repuestosComponent = {
             console.error('Error en carga masiva:', error);
             
             // Limpiar UI en caso de error
-            window.resetUIState();
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
@@ -999,17 +980,17 @@ const repuestosComponent = {
 
     mostrarPreview(datos) {
         const previewArea = document.getElementById('previewArea');
-        const previewTable = document.querySelector('#previewTable tbody');
+        const previewTableBody = document.getElementById('previewTableBody');
         const uploadBtn = document.getElementById('uploadBtn');
         
-        if (!previewArea || !previewTable || !uploadBtn) {
+        if (!previewArea || !previewTableBody || !uploadBtn) {
             console.error('Elementos de preview no encontrados');
             return;
         }
         
-        previewTable.innerHTML = '';
+        previewTableBody.innerHTML = '';
         datos.slice(0, 5).forEach(item => {
-            previewTable.innerHTML += `
+            previewTableBody.innerHTML += `
                 <tr>
                     <td>${item.codigo}</td>
                     <td>${item.nombre}</td>
@@ -1019,7 +1000,7 @@ const repuestosComponent = {
         });
         
         if (datos.length > 5) {
-            previewTable.innerHTML += `
+            previewTableBody.innerHTML += `
                 <tr>
                     <td colspan="3" class="text-center">...y ${datos.length - 5} más</td>
                 </tr>
@@ -1208,17 +1189,13 @@ const repuestosComponent = {
             // Agregar nuevo modal al DOM
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
-            // Mostrar modal usando Bootstrap directamente
+            // Mostrar modal con Bootstrap
             try {
                 const modalElement = document.getElementById('editRepuestoModal');
-                if (modalElement) {
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                }
-            } catch (error) {
-                console.error('Error al mostrar modal:', error);
-                window.resetUIState();
-                
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            } catch (modalError) {
+                console.error('Error al mostrar modal:', modalError);
                 if (typeof Swal !== 'undefined') {
                     Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
                 } else {
@@ -1230,7 +1207,7 @@ const repuestosComponent = {
             console.error('Error al editar repuesto:', error);
             
             // Limpiar UI en caso de error
-            window.resetUIState();
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo cargar el repuesto para editar: ' + (error.message || ''), 'error');
@@ -1276,19 +1253,17 @@ const repuestosComponent = {
                 });
             }
             
-            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            // CERRAR MODAL USANDO BOOTSTRAP
             try {
                 const modalElement = document.getElementById('editRepuestoModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    }
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
                 }
             } catch (modalError) {
                 console.error('Error al cerrar modal:', modalError);
-                // En caso de error, intentar limpiar manualmente
-                window.resetUIState();
+                // Si falla bootstrap, limpiar manualmente
+                this.limpiarUIBloqueada();
             }
             
             // Actualizar en Firebase
@@ -1326,7 +1301,7 @@ const repuestosComponent = {
             console.error('Error al actualizar repuesto:', error);
             
             // Limpiar UI en caso de error
-            window.resetUIState();
+            this.limpiarUIBloqueada();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo actualizar el repuesto: ' + (error.message || ''), 'error');
