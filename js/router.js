@@ -41,11 +41,53 @@ const router = {
                 }
             }
             
-            const component = this.routes[path];
+            // Comprobar si la ruta tiene parámetros (contiene /)
+            let componentPath = path;
+            let component = null;
+            let params = {};
+            
+            if (path.includes('/')) {
+                const parts = path.split('/');
+                componentPath = parts[0];
+                
+                // Manejar casos especiales
+                if (componentPath === 'locales-cliente' && parts.length > 1) {
+                    // Para rutas como 'locales-cliente/ID1234'
+                    params.clienteId = parts[1];
+                    component = this.routes['locales-cliente'];
+                } else if (componentPath === 'editar-cliente' && parts.length > 1) {
+                    // Para rutas como 'editar-cliente/ID1234'
+                    params.clienteId = parts[1];
+                    component = this.routes['editar-cliente'];
+                } else if (componentPath === 'ver-requerimiento' && parts.length > 1) {
+                    // Para rutas como 'ver-requerimiento/ID1234'
+                    params.reqId = parts[1];
+                    component = this.routes['ver-requerimiento'];
+                } else if (componentPath === 'editar-requerimiento' && parts.length > 1) {
+                    // Para rutas como 'editar-requerimiento/ID1234'
+                    params.reqId = parts[1];
+                    component = this.routes['editar-requerimiento'];
+                } else if (componentPath === 'ver-cotizacion' && parts.length > 1) {
+                    // Para rutas como 'ver-cotizacion/COT-1234'
+                    params.cotNum = parts[1];
+                    component = this.routes['ver-cotizacion'];
+                } else if (componentPath === 'editar-cotizacion' && parts.length > 1) {
+                    // Para rutas como 'editar-cotizacion/COT-1234'
+                    params.cotNum = parts[1];
+                    component = this.routes['editar-cotizacion'];
+                } else {
+                    // Para otras rutas con parámetros no definidos específicamente
+                    params.id = parts[1];
+                    component = this.routes[componentPath];
+                }
+            } else {
+                component = this.routes[path];
+            }
+            
             const app = document.getElementById('app');
             
             if (!component) {
-                console.error(`Ruta no encontrada: ${path}`);
+                console.error(`Ruta no encontrada: ${path} (componentPath: ${componentPath})`);
                 
                 // Si estamos tratando de navegar a una ruta no encontrada y no es un bucle
                 if (!isRecursiveCall) {
@@ -84,22 +126,22 @@ const router = {
                     link.classList.remove('active');
                 });
                 
-                // Encontrar y activar el link correspondiente
-                const activeLink = document.querySelector(`[onclick*="'${path}'"]`);
+                // Encontrar y activar el link correspondiente - evitar problemas con rutas con parámetros
+                const activeLink = document.querySelector(`[onclick*="'${componentPath}'"]`);
                 if (activeLink) {
                     activeLink.classList.add('active');
                 }
                 
-                // Renderizar componente
-                console.log(`Renderizando componente para: ${path}`);
+                // Renderizar componente con parámetros
+                console.log(`Renderizando componente para: ${path} con parámetros:`, params);
                 
                 // Verificar si el componente es asíncrono
                 if (component.render.constructor.name === 'AsyncFunction') {
-                    // Componente asíncrono
-                    await component.render(app);
+                    // Componente asíncrono - pasar parámetros
+                    await component.render(app, params);
                 } else {
-                    // Componente síncrono
-                    component.render(app);
+                    // Componente síncrono - pasar parámetros
+                    component.render(app, params);
                 }
                 
                 // Actualizar URL (sin recargar la página)
