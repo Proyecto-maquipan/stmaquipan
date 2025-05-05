@@ -129,7 +129,8 @@ const ModalManager = {
         if (opts.footerButtons && opts.footerButtons.length > 0) {
             footerContent = opts.footerButtons.map(btn => {
                 const dismissAttr = btn.dismiss ? 'data-bs-dismiss="modal"' : '';
-                return `<button type="button" id="${btn.id}" class="btn btn-${btn.type}" ${dismissAttr}>${btn.text}</button>`;
+                const onclickAttr = btn.onclick ? `onclick="${btn.onclick}"` : '';
+                return `<button type="button" id="${btn.id}" class="btn btn-${btn.type}" ${dismissAttr} ${onclickAttr}>${btn.text}</button>`;
             }).join('');
         }
         
