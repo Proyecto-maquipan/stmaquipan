@@ -9,21 +9,48 @@ const localesComponent = {
     
     async render(container, params = {}) {
         try {
+            console.log("Renderizando componente locales con parámetros:", params);
+            
             // Verificar si se está filtrando por un cliente específico
             let clienteId = params.clienteId || '';
             let tituloSeccion = 'Gestión de Locales';
             let subtitulo = '';
             
             if (clienteId) {
-                const cliente = await FirebaseService.getClienteById(clienteId);
-                if (cliente) {
-                    tituloSeccion = `Locales de ${cliente.razonSocial}`;
-                    subtitulo = `<div class="text-muted mb-3">RUT: ${cliente.rut}</div>`;
+                console.log("Renderizando locales para cliente específico:", clienteId);
+                let cliente = null;
+                
+                try {
+                    if (typeof FirebaseService !== 'undefined') {
+                        cliente = await FirebaseService.getClienteById(clienteId);
+                    } else if (typeof storage !== 'undefined') {
+                        // Obtener todos los clientes y filtrar por ID
+                        const clientes = await storage.getClientes();
+                        cliente = clientes.find(c => c.id === clienteId);
+                    }
+                    
+                    if (cliente) {
+                        tituloSeccion = `Locales de ${cliente.razonSocial}`;
+                        subtitulo = `<div class="text-muted mb-3">RUT: ${cliente.rut}</div>`;
+                    } else {
+                        console.warn("Cliente no encontrado con ID:", clienteId);
+                    }
+                } catch (error) {
+                    console.error("Error obteniendo datos del cliente:", error);
                 }
             }
             
             // Cargar lista de clientes para el selector
-            const clientes = await FirebaseService.getClientes();
+            let clientes = [];
+            try {
+                if (typeof FirebaseService !== 'undefined') {
+                    clientes = await FirebaseService.getClientes();
+                } else if (typeof storage !== 'undefined') {
+                    clientes = await storage.getClientes();
+                }
+            } catch (error) {
+                console.error("Error obteniendo lista de clientes:", error);
+            }
             
             container.innerHTML = `
                 <div class="container-fluid">
@@ -234,7 +261,7 @@ const localesComponent = {
                                             <tbody id="previewTableBody">
                                                 <!-- Datos de preview -->
                                             </tbody>
-                                        </table>
+                                            </table>
                                     </div>
                                 </div>
                             </div>
@@ -265,20 +292,17 @@ const localesComponent = {
                 <div class="alert alert-danger">
                     <h3>Error al cargar el módulo de locales</h3>
                     <p>No se pudieron cargar los datos. Por favor, verifica tu conexión.</p>
+                    <p>Error: ${error.message}</p>
                     <button class="btn btn-primary" onclick="router.navigate('dashboard')">Volver al Dashboard</button>
                 </div>
             `;
         }
     },
 
-    // Función para abrir modal de agregar local - ACTUALIZADA para usar Bootstrap directamente
+    // Función para abrir modal de agregar local - MODIFICADA para usar ModalManager
     abrirModalAgregarLocal() {
         try {
-            const modalElement = document.getElementById('addLocalModal');
-            if (modalElement) {
-                const modal = new bootstrap.Modal(modalElement);
-                modal.show();
-            }
+            ModalManager.show('addLocalModal');
         } catch (error) {
             console.error('Error al abrir modal de agregar local:', error);
             // Si hay error, limpiar UI
@@ -286,14 +310,10 @@ const localesComponent = {
         }
     },
 
-    // Función para abrir modal de carga masiva - ACTUALIZADA para usar Bootstrap directamente
+    // Función para abrir modal de carga masiva - MODIFICADA para usar ModalManager
     abrirModalCargaMasiva() {
         try {
-            const modalElement = document.getElementById('uploadModal');
-            if (modalElement) {
-                const modal = new bootstrap.Modal(modalElement);
-                modal.show();
-            }
+            ModalManager.show('uploadModal');
         } catch (error) {
             console.error('Error al abrir modal de carga masiva:', error);
             // Si hay error, limpiar UI
@@ -341,27 +361,56 @@ const localesComponent = {
     
     async cargarLocales(clienteId = null) {
         try {
-            let locales;
+            console.log('Iniciando carga de locales, clienteId:', clienteId);
             
-            if (clienteId) {
-                // Cargar locales de un cliente específico
-                locales = await FirebaseService.getLocalesByCliente(clienteId);
+            let locales;
+            let service;
+            
+            // Determinar qué servicio usar
+            if (typeof FirebaseService !== 'undefined') {
+                service = FirebaseService;
+                console.log('Usando FirebaseService para carga de locales');
+            } else if (typeof storage !== 'undefined' && typeof storage.getLocales === 'function') {
+                service = storage;
+                console.log('Usando storage para carga de locales');
             } else {
-                // Cargar todos los locales
-                locales = await FirebaseService.getLocales();
+                throw new Error('No se encontró un servicio de almacenamiento válido');
             }
             
+            if (clienteId) {
+                console.log('Cargando locales de cliente específico:', clienteId);
+                
+                if (typeof service.getLocalesByCliente === 'function') {
+                    locales = await service.getLocalesByCliente(clienteId);
+                } else {
+                    console.warn('Método getLocalesByCliente no disponible, obteniendo todos los locales');
+                    // Cargar todos y filtrar por cliente
+                    const todosLocales = await service.getLocales();
+                    locales = todosLocales.filter(l => l.clienteId === clienteId);
+                }
+            } else {
+                console.log('Cargando todos los locales');
+                locales = await service.getLocales();
+            }
+            
+            console.log('Locales recuperados:', locales?.length || 0);
+            
             // Obtener clientes para mostrar nombres
-            const clientes = await FirebaseService.getClientes();
+            const clientes = await service.getClientes();
             const clientesMap = {};
             clientes.forEach(cliente => {
                 clientesMap[cliente.id] = cliente.razonSocial;
             });
             
             const tbody = document.getElementById('localesTableBody');
+            if (!tbody) {
+                console.error('Elemento tbody no encontrado');
+                return;
+            }
+            
             tbody.innerHTML = '';
             
-            if (locales.length === 0) {
+            if (!locales || locales.length === 0) {
                 const colspan = clienteId ? 7 : 8;
                 tbody.innerHTML = `
                     <tr>
@@ -400,7 +449,24 @@ const localesComponent = {
             
         } catch (error) {
             console.error('Error al cargar locales:', error);
-            Swal.fire('Error', 'No se pudieron cargar los locales', 'error');
+            const tbody = document.getElementById('localesTableBody');
+            if (tbody) {
+                const colspan = this.clienteIdActual ? 7 : 8;
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="${colspan}" class="text-center">
+                            Error al cargar los locales: ${error.message}
+                            <button class="btn btn-sm btn-primary mt-2" onclick="localesComponent.cargarLocales('${this.clienteIdActual || ''}')">
+                                Reintentar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudieron cargar los locales: ' + error.message, 'error');
+            }
         }
     },
     
@@ -463,20 +529,8 @@ const localesComponent = {
                 }
             });
             
-            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
-            try {
-                const modalElement = document.getElementById('addLocalModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar manualmente
-                window.resetUIState();
-            }
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas - MODIFICADO
+            ModalManager.hide('addLocalModal');
             
             // Datos generales del local
             const local = {
@@ -499,7 +553,16 @@ const localesComponent = {
             }
             
             // Guardar en Firebase
-            await FirebaseService.saveLocal(local);
+            let service;
+            if (typeof FirebaseService !== 'undefined') {
+                service = FirebaseService;
+            } else if (typeof storage !== 'undefined' && typeof storage.saveLocal === 'function') {
+                service = storage;
+            } else {
+                throw new Error('No se encontró un servicio de almacenamiento válido');
+            }
+            
+            await service.saveLocal(local);
             
             if (loadingSwal) {
                 loadingSwal.close();
@@ -805,23 +868,20 @@ const localesComponent = {
                 }
             });
             
-            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
-            try {
-                const modalElement = document.getElementById('uploadModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar manualmente
-                window.resetUIState();
-            }
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas - MODIFICADO
+            ModalManager.hide('uploadModal');
             
             // Obtener todos los clientes para mapeo por nombre
-            const clientes = await FirebaseService.getClientes();
+            let service;
+            if (typeof FirebaseService !== 'undefined') {
+                service = FirebaseService;
+            } else if (typeof storage !== 'undefined') {
+                service = storage;
+            } else {
+                throw new Error('No se encontró un servicio de almacenamiento válido');
+            }
+            
+            const clientes = await service.getClientes();
             const clientesPorNombre = {};
             clientes.forEach(cliente => {
                 // Normalizar nombre para búsqueda insensible a case y espacios
@@ -930,21 +990,39 @@ const localesComponent = {
         
         if (result.isConfirmed) {
             try {
-                await FirebaseService.deleteLocal(id);
+                let service;
+                if (typeof FirebaseService !== 'undefined') {
+                    service = FirebaseService;
+                } else if (typeof storage !== 'undefined' && typeof storage.deleteLocal === 'function') {
+                    service = storage;
+                } else {
+                    throw new Error('No se encontró un servicio de almacenamiento válido');
+                }
+                
+                await service.deleteLocal(id);
                 Swal.fire('Eliminado', 'El local ha sido eliminado', 'success');
                 
                 // Recargar datos
                 await this.cargarLocales(this.clienteIdActual);
             } catch (error) {
                 console.error('Error al eliminar local:', error);
-                Swal.fire('Error', 'No se pudo eliminar el local', 'error');
+                Swal.fire('Error', 'No se pudo eliminar el local: ' + error.message, 'error');
             }
         }
     },
     
     async editarLocal(id) {
         try {
-            const local = await FirebaseService.getLocalById(id);
+            let service;
+            if (typeof FirebaseService !== 'undefined') {
+                service = FirebaseService;
+            } else if (typeof storage !== 'undefined') {
+                service = storage;
+            } else {
+                throw new Error('No se encontró un servicio de almacenamiento válido');
+            }
+            
+            const local = await service.getLocalById(id);
             
             if (!local) {
                 Swal.fire('Error', 'No se encontró el local', 'error');
@@ -952,128 +1030,99 @@ const localesComponent = {
             }
             
             // Obtener todos los clientes para el selector
-            const clientes = await FirebaseService.getClientes();
-            
-            const clientesOptions = clientes.map(cliente => 
-                `<option value="${cliente.id}" ${cliente.id === local.clienteId ? 'selected' : ''}>${cliente.razonSocial}</option>`
-            ).join('');
-            
-            // Crear modal de edición dinámicamente
-            const modalHtml = `
-                <div class="modal fade" id="editLocalModal" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Editar Local</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <form id="editLocalForm">
-                                    <div class="mb-3">
-                                        <label class="form-label">Tipo de Local</label>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="editTipoLocal" id="editTipoRetail" value="retail" ${local.tipo === 'retail' ? 'checked' : ''} onchange="localesComponent.cambiarTipoLocalEdit()">
-                                            <label class="form-check-label" for="editTipoRetail">
-                                                Retail
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="editTipoLocal" id="editTipoTradicional" value="canal_tradicional" ${local.tipo === 'canal_tradicional' ? 'checked' : ''} onchange="localesComponent.cambiarTipoLocalEdit()">
-                                            <label class="form-check-label" for="editTipoTradicional">
-                                                Canal Tradicional
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3 ${this.clienteIdActual ? 'd-none' : ''}">
-                                        <label for="editClienteSelect" class="form-label">Cliente</label>
-                                        <select class="form-select" id="editClienteSelect" required>
-                                            <option value="">Seleccione un cliente</option>
-                                            ${clientesOptions}
-                                        </select>
-                                    </div>
-
-                                    <!-- Campos para Retail -->
-                                    <div id="editCamposRetail" style="${local.tipo === 'retail' ? 'display:block' : 'display:none'}">
-                                        <div class="mb-3">
-                                            <label for="editNumeroCuenta" class="form-label">Número de Cuenta</label>
-                                            <input type="text" class="form-control" id="editNumeroCuenta" value="${local.numeroCuenta || ''}">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="editNumeroLocal" class="form-label">Número de Local</label>
-                                            <input type="text" class="form-control" id="editNumeroLocal" value="${local.numeroLocal || ''}">
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="editNombreLocal" class="form-label">Nombre del Local</label>
-                                        <input type="text" class="form-control" id="editNombreLocal" value="${local.nombre || ''}" required>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="editDireccionLocal" class="form-label">Dirección</label>
-                                        <input type="text" class="form-control" id="editDireccionLocal" value="${local.direccion || ''}" required>
-                                    </div>
-
-                                    <!-- Campo Dirección Facturación (Solo Canal Tradicional) -->
-                                    <div id="editCampoDireccionFacturacion" style="${local.tipo === 'canal_tradicional' ? 'display:block' : 'display:none'}">
-                                        <div class="mb-3">
-                                            <label for="editDireccionFacturacion" class="form-label">Dirección de Facturación</label>
-                                            <input type="text" class="form-control" id="editDireccionFacturacion" value="${local.direccionFacturacion || ''}">
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="editContactoLocal" class="form-label">Contacto</label>
-                                        <input type="text" class="form-control" id="editContactoLocal" value="${local.contacto || ''}" required>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="editTelefonoLocal" class="form-label">Teléfono</label>
-                                        <input type="tel" class="form-control" id="editTelefonoLocal" value="${local.telefono || ''}" required>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="editEmailLocal" class="form-label">Correo Electrónico</label>
-                                        <input type="email" class="form-control" id="editEmailLocal" value="${local.email || ''}">
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                <button type="button" class="btn btn-primary" onclick="localesComponent.actualizarLocal('${local.id}')">Guardar Cambios</button>
-                            </div>
+            const clientes = await service.getClientes();
+            const modalBodyContent = `
+                <form id="editLocalForm">
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Local</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="editTipoLocal" id="editTipoRetail" value="retail" ${local.tipo === 'retail' ? 'checked' : ''} onchange="localesComponent.cambiarTipoLocalEdit()">
+                            <label class="form-check-label" for="editTipoRetail">
+                                Retail
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="editTipoLocal" id="editTipoTradicional" value="canal_tradicional" ${local.tipo === 'canal_tradicional' ? 'checked' : ''} onchange="localesComponent.cambiarTipoLocalEdit()">
+                            <label class="form-check-label" for="editTipoTradicional">
+                                Canal Tradicional
+                            </label>
                         </div>
                     </div>
-                </div>
+
+                    <div class="mb-3 ${this.clienteIdActual ? 'd-none' : ''}">
+                        <label for="editClienteSelect" class="form-label">Cliente</label>
+                        <select class="form-select" id="editClienteSelect" required>
+                            <option value="">Seleccione un cliente</option>
+                            ${clientes.map(cliente => `
+                                <option value="${cliente.id}" ${cliente.id === local.clienteId ? 'selected' : ''}>${cliente.razonSocial}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <!-- Campos para Retail -->
+                    <div id="editCamposRetail" style="${local.tipo === 'retail' ? 'display:block' : 'display:none'}">
+                        <div class="mb-3">
+                            <label for="editNumeroCuenta" class="form-label">Número de Cuenta</label>
+                            <input type="text" class="form-control" id="editNumeroCuenta" value="${local.numeroCuenta || ''}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="editNumeroLocal" class="form-label">Número de Local</label>
+                            <input type="text" class="form-control" id="editNumeroLocal" value="${local.numeroLocal || ''}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editNombreLocal" class="form-label">Nombre del Local</label>
+                        <input type="text" class="form-control" id="editNombreLocal" value="${local.nombre || ''}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editDireccionLocal" class="form-label">Dirección</label>
+                        <input type="text" class="form-control" id="editDireccionLocal" value="${local.direccion || ''}" required>
+                    </div>
+
+                    <!-- Campo Dirección Facturación (Solo Canal Tradicional) -->
+                    <div id="editCampoDireccionFacturacion" style="${local.tipo === 'canal_tradicional' ? 'display:block' : 'display:none'}">
+                        <div class="mb-3">
+                            <label for="editDireccionFacturacion" class="form-label">Dirección de Facturación</label>
+                            <input type="text" class="form-control" id="editDireccionFacturacion" value="${local.direccionFacturacion || ''}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editContactoLocal" class="form-label">Contacto</label>
+                        <input type="text" class="form-control" id="editContactoLocal" value="${local.contacto || ''}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editTelefonoLocal" class="form-label">Teléfono</label>
+                        <input type="tel" class="form-control" id="editTelefonoLocal" value="${local.telefono || ''}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editEmailLocal" class="form-label">Correo Electrónico</label>
+                        <input type="email" class="form-control" id="editEmailLocal" value="${local.email || ''}">
+                    </div>
+                </form>
             `;
             
-            // Eliminar modal anterior si existe
-            const existingModal = document.getElementById('editLocalModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
+            // Opciones para los botones del pie del modal
+            const footerButtons = [
+                { id: 'cancelBtn', type: 'secondary', text: 'Cancelar', dismiss: true },
+                { id: 'saveBtn', type: 'primary', text: 'Guardar Cambios', onclick: `localesComponent.actualizarLocal('${local.id}')` }
+            ];
             
-            // Agregar nuevo modal al DOM
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            // Crear modal dinámicamente usando ModalManager
+            ModalManager.createDynamic('editLocalModal', 'Editar Local', modalBodyContent, {
+                footerButtons: footerButtons
+            });
             
-            // Mostrar modal usando Bootstrap directamente
-            try {
-                const modalElement = document.getElementById('editLocalModal');
-                if (modalElement) {
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                }
-            } catch (error) {
-                console.error('Error al mostrar modal:', error);
-                window.resetUIState();
-                
-                Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
-            }
+            // Mostrar el modal
+            ModalManager.show('editLocalModal');
             
         } catch (error) {
             console.error('Error al editar local:', error);
-            Swal.fire('Error', 'No se pudo cargar el local para editar', 'error');
+            Swal.fire('Error', 'No se pudo cargar el local para editar: ' + error.message, 'error');
         }
     },
     
@@ -1122,20 +1171,8 @@ const localesComponent = {
                 }
             });
             
-            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
-            try {
-                const modalElement = document.getElementById('editLocalModal');
-                if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement);
-                    if (modal) {
-                        modal.hide();
-                    }
-                }
-            } catch (modalError) {
-                console.error('Error al cerrar modal:', modalError);
-                // Limpiar manualmente
-                window.resetUIState();
-            }
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas - MODIFICADO
+            ModalManager.hide('editLocalModal');
             
             // Datos generales del local
             const localData = {
@@ -1162,8 +1199,18 @@ const localesComponent = {
                 localData.numeroLocal = firebase.firestore.FieldValue.delete();
             }
             
+            // Determinar qué servicio usar
+            let service;
+            if (typeof FirebaseService !== 'undefined') {
+                service = FirebaseService;
+            } else if (typeof storage !== 'undefined' && typeof storage.updateLocal === 'function') {
+                service = storage;
+            } else {
+                throw new Error('No se encontró un servicio de almacenamiento válido');
+            }
+            
             // Actualizar en Firebase
-            await FirebaseService.updateLocal(id, localData);
+            await service.updateLocal(id, localData);
             
             if (loadingSwal) {
                 loadingSwal.close();
@@ -1202,12 +1249,22 @@ const localesComponent = {
             const tbody = document.getElementById('localesTableBody');
             tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando locales...</td></tr>';
             
+            // Determinar qué servicio usar
+            let service;
+            if (typeof FirebaseService !== 'undefined') {
+                service = FirebaseService;
+            } else if (typeof storage !== 'undefined') {
+                service = storage;
+            } else {
+                throw new Error('No se encontró un servicio de almacenamiento válido');
+            }
+            
             // Obtener locales (filtrados por cliente si corresponde)
             let locales;
             if (this.clienteIdActual) {
-                locales = await FirebaseService.getLocalesByCliente(this.clienteIdActual);
+                locales = await service.getLocalesByCliente(this.clienteIdActual);
             } else {
-                locales = await FirebaseService.getLocales();
+                locales = await service.getLocales();
             }
             
             // Filtrar locales por término de búsqueda
@@ -1220,7 +1277,7 @@ const localesComponent = {
             );
             
             // Obtener clientes para mostrar nombres
-            const clientes = await FirebaseService.getClientes();
+            const clientes = await service.getClientes();
             const clientesMap = {};
             clientes.forEach(cliente => {
                 clientesMap[cliente.id] = cliente.razonSocial;
@@ -1266,7 +1323,7 @@ const localesComponent = {
             
         } catch (error) {
             console.error('Error en búsqueda:', error);
-            Swal.fire('Error', 'Error al realizar la búsqueda', 'error');
+            Swal.fire('Error', 'Error al realizar la búsqueda: ' + error.message, 'error');
         }
     },
     
