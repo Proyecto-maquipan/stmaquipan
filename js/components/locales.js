@@ -53,10 +53,10 @@ const localesComponent = {
                             </select>
                         </div>
                         <div class="col-md-${clienteId ? '8' : '5'} text-end">
-                            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addLocalModal">
+                            <button class="btn btn-primary me-2" onclick="localesComponent.abrirModalAgregarLocal()">
                                 <i class="fas fa-plus me-2"></i>Agregar Local
                             </button>
-                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <button class="btn btn-success" onclick="localesComponent.abrirModalCargaMasiva()">
                                 <i class="fas fa-upload me-2"></i>Carga Masiva
                             </button>
                             ${clienteId ? `
@@ -270,6 +270,36 @@ const localesComponent = {
             `;
         }
     },
+
+    // Función para abrir modal de agregar local - ACTUALIZADA para usar Bootstrap directamente
+    abrirModalAgregarLocal() {
+        try {
+            const modalElement = document.getElementById('addLocalModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        } catch (error) {
+            console.error('Error al abrir modal de agregar local:', error);
+            // Si hay error, limpiar UI
+            window.resetUIState();
+        }
+    },
+
+    // Función para abrir modal de carga masiva - ACTUALIZADA para usar Bootstrap directamente
+    abrirModalCargaMasiva() {
+        try {
+            const modalElement = document.getElementById('uploadModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        } catch (error) {
+            console.error('Error al abrir modal de carga masiva:', error);
+            // Si hay error, limpiar UI
+            window.resetUIState();
+        }
+    },
     
     agregarEstilos() {
         if (!document.getElementById('locales-styles')) {
@@ -423,6 +453,31 @@ const localesComponent = {
                 return;
             }
             
+            // Mostrar indicador de carga
+            let loadingSwal = Swal.fire({
+                title: 'Guardando...',
+                text: 'Espere por favor',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
+            try {
+                const modalElement = document.getElementById('addLocalModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                window.resetUIState();
+            }
+            
             // Datos generales del local
             const local = {
                 clienteId,
@@ -446,40 +501,48 @@ const localesComponent = {
             // Guardar en Firebase
             await FirebaseService.saveLocal(local);
             
-            // Cerrar modal y resetear formulario
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addLocalModal'));
-            modal.hide();
-            document.getElementById('addLocalForm').reset();
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
             
             Swal.fire('Éxito', 'Local agregado correctamente', 'success');
+            
+            // Resetear formulario
+            const form = document.getElementById('addLocalForm');
+            if (form) {
+                form.reset();
+            }
             
             // Recargar datos
             await this.cargarLocales(this.clienteIdActual);
             
         } catch (error) {
             console.error('Error al guardar local:', error);
-            Swal.fire('Error', 'No se pudo guardar el local', 'error');
+            
+            // Limpiar UI en caso de error
+            window.resetUIState();
+            
+            Swal.fire('Error', 'No se pudo guardar el local: ' + (error.message || ''), 'error');
         }
     },
     
     procesarArchivo(input) {
-        const file = input.files[0];
-        if (!file) return;
+        if (!input || !input.files || !input.files[0]) return;
         
-        const tipoFormato = document.querySelector('input[name="tipoFormato"]:checked').value;
+        const file = input.files[0];
         const reader = new FileReader();
         
         reader.onload = (e) => {
-            const data = e.target.result;
-            let parsedData = [];
-            
             try {
+                const data = e.target.result;
+                let parsedData = [];
+                
                 if (file.name.endsWith('.csv')) {
                     // Procesar CSV
-                    parsedData = this.procesarCSV(data, tipoFormato);
+                    parsedData = this.procesarCSV(data, this.getTipoFormato());
                 } else {
                     // Procesar Excel
-                    parsedData = this.procesarExcel(data, tipoFormato);
+                    parsedData = this.procesarExcel(data, this.getTipoFormato());
                 }
                 
                 if (parsedData.length === 0) {
@@ -488,7 +551,7 @@ const localesComponent = {
                 }
                 
                 this.datosTemporales = parsedData;
-                this.mostrarPreview(parsedData, tipoFormato);
+                this.mostrarPreview(parsedData, this.getTipoFormato());
                 
             } catch (error) {
                 console.error('Error procesando archivo:', error);
@@ -508,12 +571,16 @@ const localesComponent = {
         }
     },
     
+    getTipoFormato() {
+        return document.querySelector('input[name="tipoFormato"]:checked').value;
+    },
+    
     procesarCSV(data, tipoFormato) {
         const lines = data.split('\n');
         if (lines.length < 2) return [];
         
         // Procesar encabezados
-        const headers = lines[0].split(';').map(h => h.trim().toLowerCase());
+        const headers = lines[0].toLowerCase().split(';').map(h => h.trim().toLowerCase());
         
         // Validar encabezados según tipo de formato
         if (tipoFormato === 'retail') {
@@ -722,11 +789,36 @@ const localesComponent = {
         }
         
         try {
-            const tipoFormato = document.querySelector('input[name="tipoFormato"]:checked').value;
+            const tipoFormato = this.getTipoFormato();
             const totalRegistros = this.datosTemporales.length;
             const batchSize = 100; // Procesar en lotes de 100
             let procesados = 0;
             let errores = 0;
+            
+            // Mostrar indicador de carga
+            let progressSwal = Swal.fire({
+                title: 'Cargando locales...',
+                html: `Procesando: <b>0</b> de ${totalRegistros}`,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
+            try {
+                const modalElement = document.getElementById('uploadModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                window.resetUIState();
+            }
             
             // Obtener todos los clientes para mapeo por nombre
             const clientes = await FirebaseService.getClientes();
@@ -735,15 +827,6 @@ const localesComponent = {
                 // Normalizar nombre para búsqueda insensible a case y espacios
                 const nombreNormalizado = cliente.razonSocial.toLowerCase().replace(/\s+/g, '');
                 clientesPorNombre[nombreNormalizado] = cliente.id;
-            });
-            
-            Swal.fire({
-                title: 'Cargando locales...',
-                html: `Procesando: <b>0</b> de ${totalRegistros}`,
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
             });
             
             // Procesar en lotes para evitar sobrecargar Firebase
@@ -806,8 +889,7 @@ const localesComponent = {
                 });
             }
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
-            modal.hide();
+            progressSwal.close();
             
             if (errores > 0) {
                 Swal.fire('Completado con advertencias', `${procesados} locales cargados correctamente. ${errores} registros no pudieron procesarse debido a datos incompletos o clientes no encontrados.`, 'warning');
@@ -826,6 +908,10 @@ const localesComponent = {
             
         } catch (error) {
             console.error('Error en carga masiva:', error);
+            
+            // Limpiar UI en caso de error
+            window.resetUIState();
+            
             Swal.fire('Error', `No se pudieron cargar los locales: ${error.message}`, 'error');
         }
     },
@@ -971,9 +1057,19 @@ const localesComponent = {
             // Agregar nuevo modal al DOM
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
-            // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('editLocalModal'));
-            modal.show();
+            // Mostrar modal usando Bootstrap directamente
+            try {
+                const modalElement = document.getElementById('editLocalModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                }
+            } catch (error) {
+                console.error('Error al mostrar modal:', error);
+                window.resetUIState();
+                
+                Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
+            }
             
         } catch (error) {
             console.error('Error al editar local:', error);
@@ -1016,6 +1112,31 @@ const localesComponent = {
                 return;
             }
             
+            // Mostrar indicador de carga
+            let loadingSwal = Swal.fire({
+                title: 'Actualizando...',
+                text: 'Espere por favor',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
+            try {
+                const modalElement = document.getElementById('editLocalModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                window.resetUIState();
+            }
+            
             // Datos generales del local
             const localData = {
                 clienteId,
@@ -1044,9 +1165,9 @@ const localesComponent = {
             // Actualizar en Firebase
             await FirebaseService.updateLocal(id, localData);
             
-            // Cerrar modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editLocalModal'));
-            modal.hide();
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
             
             Swal.fire('Éxito', 'Local actualizado correctamente', 'success');
             
@@ -1055,7 +1176,11 @@ const localesComponent = {
             
         } catch (error) {
             console.error('Error al actualizar local:', error);
-            Swal.fire('Error', 'No se pudo actualizar el local', 'error');
+            
+            // Limpiar UI en caso de error
+            window.resetUIState();
+            
+            Swal.fire('Error', 'No se pudo actualizar el local: ' + (error.message || ''), 'error');
         }
     },
     
@@ -1185,4 +1310,3 @@ const localesComponent = {
         }
     }
 };
-
