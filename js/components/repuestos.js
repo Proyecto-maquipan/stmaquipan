@@ -41,10 +41,10 @@ const repuestosComponent = {
                             </select>
                         </div>
                         <div class="col-md-6 text-end">
-                            <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addRepuestoModal">
+                            <button class="btn btn-primary me-2" onclick="repuestosComponent.abrirModalAgregarRepuesto()">
                                 <i class="fas fa-plus me-2"></i>Agregar Repuesto
                             </button>
-                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <button class="btn btn-success" onclick="repuestosComponent.abrirModalCargaMasiva()">
                                 <i class="fas fa-upload me-2"></i>Carga Masiva
                             </button>
                         </div>
@@ -130,7 +130,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('addRepuestoModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.guardarRepuesto()">Guardar</button>
                             </div>
                         </div>
@@ -173,7 +173,7 @@ const repuestosComponent = {
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('uploadModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.cargarRepuestosMasivo()" disabled id="uploadBtn">Cargar Datos</button>
                             </div>
                         </div>
@@ -184,11 +184,30 @@ const repuestosComponent = {
             // Cargar estilos personalizados
             this.agregarEstilos();
             
-            // Contar total de repuestos
-            await this.contarTotalRepuestos();
+            try {
+                // Contar total de repuestos
+                await this.contarTotalRepuestos();
+            } catch (error) {
+                console.error('Error contando repuestos:', error);
+                document.getElementById('totalRepuestos').textContent = 'Error al cargar';
+            }
             
-            // Cargar primera página
-            await this.cargarRepuestosPaginados();
+            try {
+                // Cargar primera página
+                await this.cargarRepuestosPaginados();
+            } catch (error) {
+                console.error('Error cargando repuestos paginados:', error);
+                const tbody = document.getElementById('repuestosTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center">
+                                Error al cargar los repuestos. <button onclick="repuestosComponent.cargarRepuestosPaginados()" class="btn btn-sm btn-primary">Reintentar</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
             
             // Inicializar eventos
             this.inicializarEventos();
@@ -204,7 +223,32 @@ const repuestosComponent = {
             `;
         }
     },
-    
+
+    // Función auxiliar para mostrar modales de forma segura
+    mostrarModal(modalId) {
+        return ModalManager.open(modalId);
+    },
+
+    // Función auxiliar para cerrar modales de forma segura
+    cerrarModal(modalId) {
+        return ModalManager.close(modalId);
+    },
+
+    // Función para limpiar UI bloqueada
+    limpiarUIBloqueada() {
+        // Usar la función global
+        ModalManager.cleanUI();
+    },
+
+    // Funciones para abrir los modales de forma segura
+    abrirModalAgregarRepuesto() {
+        this.mostrarModal('addRepuestoModal');
+    },
+
+    abrirModalCargaMasiva() {
+        this.mostrarModal('uploadModal');
+    },
+
     agregarEstilos() {
         if (!document.getElementById('repuestos-styles')) {
             const style = document.createElement('style');
@@ -239,18 +283,45 @@ const repuestosComponent = {
 
     async contarTotalRepuestos() {
         try {
-            const snapshot = await firebase.firestore().collection('repuestos').get();
+            // Agregar tiempo de espera máximo para evitar bloqueos
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
+            const fetchPromise = firebase.firestore().collection('repuestos').get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
+            
             this.totalItems = snapshot.size;
-            document.getElementById('totalRepuestos').textContent = this.totalItems.toLocaleString();
+            const totalElement = document.getElementById('totalRepuestos');
+            if (totalElement) {
+                totalElement.textContent = this.totalItems.toLocaleString();
+            }
         } catch (error) {
             console.error('Error contando repuestos:', error);
+            // No propagar el error, manejar graciosamente
+            const totalElement = document.getElementById('totalRepuestos');
+            if (totalElement) {
+                totalElement.textContent = 'Error al cargar';
+            }
         }
     },
 
     async cargarRepuestosPaginados(page = 1) {
         try {
             const tbody = document.getElementById('repuestosTableBody');
+            if (!tbody) {
+                console.error('Elemento tbody no encontrado');
+                return;
+            }
+            
             tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
             
             let query = firebase.firestore().collection('repuestos')
                 .orderBy(this.ordenamiento, this.direccionOrden)
@@ -261,7 +332,15 @@ const repuestosComponent = {
                 query = query.startAfter(this.lastVisible);
             }
             
-            const snapshot = await query.get();
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
+            const fetchPromise = query.get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
             
             // Guardar el último documento para la siguiente página
             if (!snapshot.empty) {
@@ -270,13 +349,19 @@ const repuestosComponent = {
             
             // Renderizar datos
             tbody.innerHTML = '';
+            
+            if (snapshot.empty) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron repuestos</td></tr>';
+                return;
+            }
+            
             snapshot.forEach(doc => {
                 const repuesto = doc.data();
                 tbody.innerHTML += `
                     <tr>
-                        <td>${repuesto.codigo}</td>
-                        <td>${repuesto.nombre}</td>
-                        <td>$${repuesto.precio.toFixed(2)}</td>
+                        <td>${repuesto.codigo || ''}</td>
+                        <td>${repuesto.nombre || ''}</td>
+                        <td>$${(repuesto.precio || 0).toFixed(2)}</td>
                         <td>
                             <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${doc.id}')">
                                 <i class="fas fa-edit"></i>
@@ -289,21 +374,44 @@ const repuestosComponent = {
                 `;
             });
             
-            if (snapshot.empty) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron repuestos</td></tr>';
-            }
-            
             this.currentPage = page;
             this.actualizarPaginacion();
             
         } catch (error) {
             console.error('Error al cargar repuestos paginados:', error);
-            Swal.fire('Error', 'No se pudieron cargar los repuestos', 'error');
+            
+            const tbody = document.getElementById('repuestosTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center">
+                            Error al cargar los repuestos. <button onclick="repuestosComponent.cargarRepuestosPaginados()" class="btn btn-sm btn-primary">Reintentar</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'No se pudieron cargar los repuestos. ¿Deseas reintentar?',
+                    icon: 'error',
+                    showCancelButton: true,
+                    confirmButtonText: 'Reintentar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargarRepuestosPaginados();
+                    }
+                });
+            }
         }
     },
 
     cambiarOrdenamiento() {
         const ordenamientoSelect = document.getElementById('ordenamiento');
+        if (!ordenamientoSelect) return;
+        
         const [campo, direccion] = ordenamientoSelect.value.split('-');
         
         this.ordenamiento = campo;
@@ -317,12 +425,14 @@ const repuestosComponent = {
     actualizarPaginacion() {
         const totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
         const pagination = document.getElementById('pagination');
+        if (!pagination) return;
+        
         pagination.innerHTML = '';
         
         // Botón anterior
         pagination.innerHTML += `
             <li class="page-item ${this.currentPage === 1 ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="repuestosComponent.cambiarPagina(${this.currentPage - 1}); return false;">Anterior</a>
+                <a class="page-link" href="#" onclick="event.preventDefault(); repuestosComponent.cambiarPagina(${this.currentPage - 1}); return false;">Anterior</a>
             </li>
         `;
         
@@ -337,7 +447,7 @@ const repuestosComponent = {
         for (let i = startPage; i <= endPage; i++) {
             pagination.innerHTML += `
                 <li class="page-item ${i === this.currentPage ? 'active' : ''}">
-                    <a class="page-link" href="#" onclick="repuestosComponent.cambiarPagina(${i}); return false;">${i}</a>
+                    <a class="page-link" href="#" onclick="event.preventDefault(); repuestosComponent.cambiarPagina(${i}); return false;">${i}</a>
                 </li>
             `;
         }
@@ -345,7 +455,7 @@ const repuestosComponent = {
         // Botón siguiente
         pagination.innerHTML += `
             <li class="page-item ${this.currentPage === totalPages ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="repuestosComponent.cambiarPagina(${this.currentPage + 1}); return false;">Siguiente</a>
+                <a class="page-link" href="#" onclick="event.preventDefault(); repuestosComponent.cambiarPagina(${this.currentPage + 1}); return false;">Siguiente</a>
             </li>
         `;
     },
@@ -363,7 +473,7 @@ const repuestosComponent = {
     },
 
     async buscarRepuestos() {
-        const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+        const searchTerm = document.getElementById('searchInput')?.value?.trim()?.toLowerCase() || '';
         
         if (searchTerm === '') {
             // Si no hay término de búsqueda, volver a la vista normal
@@ -375,27 +485,47 @@ const repuestosComponent = {
         
         try {
             const tbody = document.getElementById('repuestosTableBody');
+            if (!tbody) return;
+            
             tbody.innerHTML = '<tr><td colspan="4" class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</td></tr>';
             
-            // Buscar por código exacto primero
-            let query = firebase.firestore().collection('repuestos')
-                .where('codigo', '==', searchTerm.toUpperCase())
-                .limit(50);
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
             
-            let snapshot = await query.get();
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 15000)
+            );
+            
+            // Buscar por código exacto primero
+            const queryPromise = firebase.firestore().collection('repuestos')
+                .where('codigo', '==', searchTerm.toUpperCase())
+                .limit(50)
+                .get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const snapshot = await Promise.race([queryPromise, timeoutPromise]);
             
             // Si no se encuentra por código, buscar en nombre
             if (snapshot.empty) {
                 // Firebase no soporta búsquedas de texto completo, así que necesitamos obtener todos los documentos
                 // y filtrar en el cliente. Para optimizar, limitamos la búsqueda.
-                const allSnapshot = await firebase.firestore().collection('repuestos')
+                const allSnapshotPromise = firebase.firestore().collection('repuestos')
                     .orderBy('nombre')
+                    .limit(500) // Limitar a 500 para evitar problemas de rendimiento
                     .get();
+                
+                const allSnapshot = await Promise.race([allSnapshotPromise, timeoutPromise]);
                 
                 const results = [];
                 allSnapshot.forEach(doc => {
                     const repuesto = doc.data();
-                    if (repuesto.nombre.toLowerCase().includes(searchTerm)) {
+                    const nombre = (repuesto.nombre || '').toLowerCase();
+                    const codigo = (repuesto.codigo || '').toLowerCase();
+                    
+                    if (nombre.includes(searchTerm) || codigo.includes(searchTerm)) {
                         results.push({ id: doc.id, ...repuesto });
                     }
                 });
@@ -404,12 +534,18 @@ const repuestosComponent = {
                 const limitedResults = results.slice(0, 50);
                 
                 tbody.innerHTML = '';
+                
+                if (limitedResults.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron resultados</td></tr>';
+                    return;
+                }
+                
                 limitedResults.forEach(repuesto => {
                     tbody.innerHTML += `
                         <tr>
-                            <td>${repuesto.codigo}</td>
-                            <td>${repuesto.nombre}</td>
-                            <td>$${repuesto.precio.toFixed(2)}</td>
+                            <td>${repuesto.codigo || ''}</td>
+                            <td>${repuesto.nombre || ''}</td>
+                            <td>$${(repuesto.precio || 0).toFixed(2)}</td>
                             <td>
                                 <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${repuesto.id}')">
                                     <i class="fas fa-edit"></i>
@@ -422,12 +558,11 @@ const repuestosComponent = {
                     `;
                 });
                 
-                if (limitedResults.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No se encontraron resultados</td></tr>';
-                }
-                
                 // Deshabilitar paginación durante búsqueda
-                document.getElementById('pagination').innerHTML = '';
+                const pagination = document.getElementById('pagination');
+                if (pagination) {
+                    pagination.innerHTML = '';
+                }
             } else {
                 // Mostrar resultados de búsqueda por código
                 tbody.innerHTML = '';
@@ -435,9 +570,9 @@ const repuestosComponent = {
                     const repuesto = doc.data();
                     tbody.innerHTML += `
                         <tr>
-                            <td>${repuesto.codigo}</td>
-                            <td>${repuesto.nombre}</td>
-                            <td>$${repuesto.precio.toFixed(2)}</td>
+                            <td>${repuesto.codigo || ''}</td>
+                            <td>${repuesto.nombre || ''}</td>
+                            <td>$${(repuesto.precio || 0).toFixed(2)}</td>
                             <td>
                                 <button class="btn btn-sm btn-info btn-action" onclick="repuestosComponent.editarRepuesto('${doc.id}')">
                                     <i class="fas fa-edit"></i>
@@ -451,26 +586,70 @@ const repuestosComponent = {
                 });
                 
                 // Deshabilitar paginación durante búsqueda
-                document.getElementById('pagination').innerHTML = '';
+                const pagination = document.getElementById('pagination');
+                if (pagination) {
+                    pagination.innerHTML = '';
+                }
             }
             
         } catch (error) {
             console.error('Error en búsqueda:', error);
-            Swal.fire('Error', 'Error al realizar la búsqueda', 'error');
+            
+            const tbody = document.getElementById('repuestosTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center">
+                            Error al realizar la búsqueda. <button onclick="repuestosComponent.buscarRepuestos()" class="btn btn-sm btn-primary">Reintentar</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Error al realizar la búsqueda: ' + (error.message || ''), 'error');
+            }
         }
     },
 
     async guardarRepuesto() {
-        const codigo = document.getElementById('codigo').value;
-        const nombre = document.getElementById('nombre').value;
-        const precio = parseFloat(document.getElementById('precio').value);
-        
-        if (!codigo || !nombre || !precio) {
-            Swal.fire('Error', 'Todos los campos son requeridos', 'error');
-            return;
-        }
-        
         try {
+            const codigo = document.getElementById('codigo')?.value;
+            const nombre = document.getElementById('nombre')?.value;
+            const precioElement = document.getElementById('precio');
+            const precio = precioElement ? parseFloat(precioElement.value) : 0;
+            
+            if (!codigo || !nombre || isNaN(precio)) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Todos los campos son requeridos y el precio debe ser un número', 'error');
+                } else {
+                    alert('Todos los campos son requeridos y el precio debe ser un número');
+                }
+                return;
+            }
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Guardando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            this.cerrarModal('addRepuestoModal');
+            
+            // Guardar en Firebase
             await firebase.firestore().collection('repuestos').add({
                 codigo,
                 nombre,
@@ -478,93 +657,308 @@ const repuestosComponent = {
                 fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addRepuestoModal'));
-            modal.hide();
-            document.getElementById('addRepuestoForm').reset();
+            // Limpiar formulario
+            const form = document.getElementById('addRepuestoForm');
+            if (form) {
+                form.reset();
+            }
             
-            Swal.fire('Éxito', 'Repuesto agregado correctamente', 'success');
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Éxito',
+                    text: 'Repuesto agregado correctamente',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                alert('Repuesto agregado correctamente');
+            }
             
             // Actualizar contador y recargar
+            try {
+                await this.contarTotalRepuestos();
+                this.currentPage = 1;
+                this.lastVisible = null;
+                await this.cargarRepuestosPaginados();
+            } catch (refreshError) {
+                console.error('Error al actualizar lista:', refreshError);
+            }
+            
+        } catch (error) {
+            console.error('Error al guardar repuesto:', error);
+            
+            // Limpiar UI en caso de error
+            ModalManager.cleanUI();
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'No se pudo guardar el repuesto. ' + (error.message || ''),
+                    icon: 'error',
+                    confirmButtonText: 'Aceptar'
+                });
+            } else {
+                alert('Error al guardar el repuesto: ' + (error.message || ''));
+            }
+        }
+    },
+
+    async cargarRepuestosMasivo() {
+        if (!this.datosTemporales || this.datosTemporales.length === 0) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No hay datos para cargar', 'error');
+            } else {
+                alert('No hay datos para cargar');
+            }
+            return;
+        }
+        
+        try {
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            const totalRegistros = this.datosTemporales.length;
+            const batchSize = 500; // Procesar en lotes de 500
+            let procesados = 0;
+            let actualizados = 0;
+            let nuevos = 0;
+            
+            // Mostrar indicador de progreso
+            let progressSwal;
+            if (typeof Swal !== 'undefined') {
+                progressSwal = Swal.fire({
+                    title: 'Analizando repuestos...',
+                    html: `Preparando datos...`,
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            this.cerrarModal('uploadModal');
+            
+            // Primero, obtener todos los códigos de repuestos existentes
+            const snapshot = await firebase.firestore().collection('repuestos').get();
+            const repuestosExistentes = {};
+            snapshot.forEach(doc => {
+                const repuesto = doc.data();
+                repuestosExistentes[repuesto.codigo] = {
+                    id: doc.id,
+                    ...repuesto
+                };
+            });
+            
+            if (progressSwal) {
+                Swal.update({
+                    title: 'Cargando repuestos...',
+                    html: `Procesando: <b>0</b> de ${totalRegistros}`
+                });
+            }
+            
+            // Procesar en lotes para evitar sobrecargar Firebase
+            for (let i = 0; i < totalRegistros; i += batchSize) {
+                const batch = firebase.firestore().batch();
+                const lote = this.datosTemporales.slice(i, i + batchSize);
+                
+                lote.forEach(repuesto => {
+                    if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
+                        // Verificar si el repuesto ya existe
+                        if (repuestosExistentes[repuesto.codigo]) {
+                            // Actualizar repuesto existente
+                            const docRef = firebase.firestore().collection('repuestos').doc(repuestosExistentes[repuesto.codigo].id);
+                            batch.update(docRef, {
+                                nombre: repuesto.nombre,
+                                precio: repuesto.precio,
+                                fechaModificacion: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            actualizados++;
+                        } else {
+                            // Crear nuevo repuesto
+                            const docRef = firebase.firestore().collection('repuestos').doc();
+                            batch.set(docRef, {
+                                codigo: repuesto.codigo,
+                                nombre: repuesto.nombre,
+                                precio: repuesto.precio,
+                                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            nuevos++;
+                        }
+                    }
+                });
+                
+                // Añadir un timeout para evitar bloqueos
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Tiempo de espera agotado')), 15000)
+                );
+                
+                const batchPromise = batch.commit();
+                
+                // Usar Promise.race para limitar el tiempo de espera
+                await Promise.race([batchPromise, timeoutPromise]);
+                
+                procesados += lote.length;
+                
+                // Actualizar progreso
+                if (progressSwal) {
+                    Swal.update({
+                        html: `Procesando: <b>${procesados}</b> de ${totalRegistros}`
+                    });
+                }
+            }
+            
+            // Asegurarse de limpiar la UI
+            ModalManager.cleanUI();
+            
+            if (progressSwal) {
+                progressSwal.close();
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Éxito', `Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`, 'success');
+            } else {
+                alert(`Proceso completado con éxito.\nNuevos repuestos: ${nuevos}\nRepuestos actualizados: ${actualizados}`);
+            }
+            
+            // Actualizar vista
             await this.contarTotalRepuestos();
             this.currentPage = 1;
             this.lastVisible = null;
-            this.cargarRepuestosPaginados();
+            await this.cargarRepuestosPaginados();
+            
+            // Resetear
+            this.datosTemporales = [];
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.value = '';
+            }
+            const previewArea = document.getElementById('previewArea');
+            if (previewArea) {
+                previewArea.style.display = 'none';
+            }
+            const uploadBtn = document.getElementById('uploadBtn');
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+            }
+            
         } catch (error) {
-            console.error('Error al guardar repuesto:', error);
-            Swal.fire('Error', 'No se pudo guardar el repuesto', 'error');
+            console.error('Error en carga masiva:', error);
+            
+            // Limpiar UI en caso de error
+            ModalManager.cleanUI();
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
+            } else {
+                alert(`Error en carga masiva: ${error.message}`);
+            }
         }
     },
 
     procesarArchivo(input) {
-        const file = input.files[0];
-        if (!file) return;
+        if (!input || !input.files || !input.files[0]) return;
         
+        const file = input.files[0];
         const reader = new FileReader();
+        
         reader.onload = (e) => {
-            const data = e.target.result;
-            let parsedData = [];
-            
-            if (file.name.endsWith('.csv')) {
-                // Procesar CSV
-                const lines = data.split('\n');
+            try {
+                const data = e.target.result;
+                let parsedData = [];
                 
-                // Procesar encabezados para encontrar índices de columnas
-                const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
-                const codigoIndex = headers.findIndex(h => h.includes('código') || h.includes('codigo'));
-                const nombreIndex = headers.findIndex(h => h.includes('nombre'));
-                const precioIndex = headers.findIndex(h => h.includes('precio'));
-                
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (line) {
-                        const columns = line.split(',');
-                        
-                        // Validar que el registro tenga datos válidos
-                        const codigo = columns[codigoIndex]?.trim();
-                        const nombre = columns[nombreIndex]?.trim();
-                        const precio = parseFloat(columns[precioIndex]);
-                        
-                        if (codigo && nombre && !isNaN(precio)) {
-                            parsedData.push({
-                                codigo: codigo,
-                                nombre: nombre,
-                                precio: precio
-                            });
+                if (file.name.endsWith('.csv')) {
+                    // Procesar CSV
+                    const lines = data.split('\n');
+                    
+                    // Procesar encabezados para encontrar índices de columnas
+                    const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+                    const codigoIndex = headers.findIndex(h => h.includes('código') || h.includes('codigo'));
+                    const nombreIndex = headers.findIndex(h => h.includes('nombre'));
+                    const precioIndex = headers.findIndex(h => h.includes('precio'));
+                    
+                    if (codigoIndex === -1 || nombreIndex === -1 || precioIndex === -1) {
+                        throw new Error('El archivo CSV no tiene las columnas requeridas');
+                    }
+                    
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (line) {
+                            const columns = line.split(',');
+                            
+                            // Validar que el registro tenga datos válidos
+                            const codigo = columns[codigoIndex]?.trim();
+                            const nombre = columns[nombreIndex]?.trim();
+                            const precio = parseFloat(columns[precioIndex]);
+                            
+                            if (codigo && nombre && !isNaN(precio)) {
+                                parsedData.push({
+                                    codigo: codigo,
+                                    nombre: nombre,
+                                    precio: precio
+                                });
+                            }
                         }
                     }
-                }
-            } else {
-                // Procesar Excel
-                const workbook = XLSX.read(data, { type: 'binary' });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(sheet);
-                
-                parsedData = jsonData.map(row => {
-                    // Intentar múltiples variaciones de nombres de columna
-                    const codigo = row['Código'] || row['codigo'] || row['CODIGO'] || '';
-                    const nombre = row['Nombre'] || row['nombre'] || row['NOMBRE'] || '';
-                    const precio = parseFloat(row['Precio'] || row['precio'] || row['PRECIO'] || 0);
+                } else {
+                    // Procesar Excel
+                    if (typeof XLSX === 'undefined') {
+                        throw new Error('Librería XLSX no encontrada');
+                    }
                     
-                    return {
-                        codigo: codigo.toString().trim(),
-                        nombre: nombre.toString().trim(),
-                        precio: isNaN(precio) ? 0 : precio
-                    };
-                }).filter(item => item.codigo && item.nombre && item.precio > 0);
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet);
+                    
+                    parsedData = jsonData.map(row => {
+                        // Intentar múltiples variaciones de nombres de columna
+                        const codigo = row['Código'] || row['codigo'] || row['CODIGO'] || '';
+                        const nombre = row['Nombre'] || row['nombre'] || row['NOMBRE'] || '';
+                        const precio = parseFloat(row['Precio'] || row['precio'] || row['PRECIO'] || 0);
+                        
+                        return {
+                            codigo: codigo.toString().trim(),
+                            nombre: nombre.toString().trim(),
+                            precio: isNaN(precio) ? 0 : precio
+                        };
+                    }).filter(item => item.codigo && item.nombre && item.precio > 0);
+                }
+                
+                if (parsedData.length === 0) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', 'No se encontraron datos válidos en el archivo', 'error');
+                    } else {
+                        alert('No se encontraron datos válidos en el archivo');
+                    }
+                    return;
+                }
+                
+                this.datosTemporales = parsedData;
+                this.mostrarPreview(parsedData);
+            } catch (error) {
+                console.error('Error procesando archivo:', error);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Error al procesar el archivo. ' + (error.message || ''), 'error');
+                } else {
+                    alert('Error al procesar el archivo: ' + (error.message || ''));
+                }
             }
-            
-            if (parsedData.length === 0) {
-                Swal.fire('Error', 'No se encontraron datos válidos en el archivo', 'error');
-                return;
-            }
-            
-            this.datosTemporales = parsedData;
-            this.mostrarPreview(parsedData);
         };
         
         reader.onerror = (error) => {
             console.error('Error leyendo archivo:', error);
-            Swal.fire('Error', 'Error al leer el archivo', 'error');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Error al leer el archivo', 'error');
+            } else {
+                alert('Error al leer el archivo');
+            }
         };
         
         if (file.name.endsWith('.csv')) {
@@ -578,6 +972,11 @@ const repuestosComponent = {
         const previewArea = document.getElementById('previewArea');
         const previewTable = document.querySelector('#previewTable tbody');
         const uploadBtn = document.getElementById('uploadBtn');
+        
+        if (!previewArea || !previewTable || !uploadBtn) {
+            console.error('Elementos de preview no encontrados');
+            return;
+        }
         
         previewTable.innerHTML = '';
         datos.slice(0, 5).forEach(item => {
@@ -602,108 +1001,136 @@ const repuestosComponent = {
         uploadBtn.disabled = false;
     },
 
-    async cargarRepuestosMasivo() {
-        if (this.datosTemporales.length === 0) {
-            Swal.fire('Error', 'No hay datos para cargar', 'error');
-            return;
-        }
+    async eliminarRepuesto(id) {
+        if (!id) return;
         
         try {
-            const totalRegistros = this.datosTemporales.length;
-            const batchSize = 500; // Procesar en lotes de 500
-            let procesados = 0;
-            
-            Swal.fire({
-                title: 'Cargando repuestos...',
-                html: `Procesando: <b>0</b> de ${totalRegistros}`,
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-            
-            // Procesar en lotes para evitar sobrecargar Firebase
-            for (let i = 0; i < totalRegistros; i += batchSize) {
-                const batch = firebase.firestore().batch();
-                const lote = this.datosTemporales.slice(i, i + batchSize);
-                
-                lote.forEach(repuesto => {
-                    if (repuesto.codigo && repuesto.nombre && repuesto.precio) {
-                        const docRef = firebase.firestore().collection('repuestos').doc();
-                        batch.set(docRef, {
-                            codigo: repuesto.codigo,
-                            nombre: repuesto.nombre,
-                            precio: repuesto.precio,
-                            fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                    }
+            // Pedir confirmación
+            let confirmed = false;
+            if (typeof Swal !== 'undefined') {
+                const result = await Swal.fire({
+                    title: '¿Estás seguro?',
+                    text: "Esta acción no se puede deshacer",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
                 });
                 
-                await batch.commit();
-                procesados += lote.length;
-                
-                // Actualizar progreso
-                Swal.update({
-                    html: `Procesando: <b>${procesados}</b> de ${totalRegistros}`
+                confirmed = result.isConfirmed;
+            } else {
+                confirmed = confirm("¿Estás seguro de que deseas eliminar este repuesto?");
+            }
+            
+            if (!confirmed) return;
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Eliminando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
                 });
             }
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
-            modal.hide();
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
             
-            Swal.fire('Éxito', `${procesados} repuestos cargados correctamente`, 'success');
+            const deletePromise = firebase.firestore().collection('repuestos').doc(id).delete();
             
-            // Actualizar vista
-            await this.contarTotalRepuestos();
-            this.currentPage = 1;
-            this.lastVisible = null;
-            this.cargarRepuestosPaginados();
+            // Usar Promise.race para limitar el tiempo de espera
+            await Promise.race([deletePromise, timeoutPromise]);
             
-            // Resetear
-            this.datosTemporales = [];
-            document.getElementById('fileInput').value = '';
-            document.getElementById('previewArea').style.display = 'none';
-            document.getElementById('uploadBtn').disabled = true;
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Eliminado',
+                    text: 'El repuesto ha sido eliminado',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                alert('Repuesto eliminado correctamente');
+            }
+            
+            // Actualizar contador y recargar
+            try {
+                await this.contarTotalRepuestos();
+                await this.cargarRepuestosPaginados(this.currentPage);
+            } catch (refreshError) {
+                console.error('Error al actualizar lista:', refreshError);
+            }
             
         } catch (error) {
-            console.error('Error en carga masiva:', error);
-            Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
-        }
-    },
-
-    async eliminarRepuesto(id) {
-        const result = await Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Esta acción no se puede deshacer",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        });
-        
-        if (result.isConfirmed) {
-            try {
-                await firebase.firestore().collection('repuestos').doc(id).delete();
-                Swal.fire('Eliminado', 'El repuesto ha sido eliminado', 'success');
-                
-                // Actualizar vista
-                await this.contarTotalRepuestos();
-                this.cargarRepuestosPaginados(this.currentPage);
-            } catch (error) {
-                console.error('Error al eliminar:', error);
-                Swal.fire('Error', 'No se pudo eliminar el repuesto', 'error');
+            console.error('Error al eliminar:', error);
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudo eliminar el repuesto: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al eliminar el repuesto: ' + (error.message || ''));
             }
         }
     },
 
     async editarRepuesto(id) {
+        if (!id) return;
+        
         try {
-            const doc = await firebase.firestore().collection('repuestos').doc(id).get();
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Cargando repuesto...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // Agregar tiempo de espera máximo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Tiempo de espera agotado')), 10000)
+            );
+            
+            const docPromise = firebase.firestore().collection('repuestos').doc(id).get();
+            
+            // Usar Promise.race para limitar el tiempo de espera
+            const doc = await Promise.race([docPromise, timeoutPromise]);
+            
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
             
             if (!doc.exists) {
-                Swal.fire('Error', 'El repuesto no existe', 'error');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'El repuesto no existe', 'error');
+                } else {
+                    alert('El repuesto no existe');
+                }
                 return;
             }
             
@@ -716,26 +1143,26 @@ const repuestosComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Editar Repuesto</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <button type="button" class="btn-close" onclick="repuestosComponent.cerrarModal('editRepuestoModal')"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="editRepuestoForm">
                                     <div class="mb-3">
                                         <label for="editCodigo" class="form-label">Código del Objeto</label>
-                                        <input type="text" class="form-control" id="editCodigo" value="${repuesto.codigo}" required>
+                                        <input type="text" class="form-control" id="editCodigo" value="${repuesto.codigo || ''}" required>
                                     </div>
                                     <div class="mb-3">
                                         <label for="editNombre" class="form-label">Nombre del Artículo</label>
-                                        <input type="text" class="form-control" id="editNombre" value="${repuesto.nombre}" required>
+                                        <input type="text" class="form-control" id="editNombre" value="${repuesto.nombre || ''}" required>
                                     </div>
                                     <div class="mb-3">
                                         <label for="editPrecio" class="form-label">Precio</label>
-                                        <input type="number" class="form-control" id="editPrecio" value="${repuesto.precio}" step="0.01" required>
+                                        <input type="number" class="form-control" id="editPrecio" value="${repuesto.precio || 0}" step="0.01" required>
                                     </div>
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('editRepuestoModal')">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.actualizarRepuesto('${id}')">Actualizar</button>
                             </div>
                         </div>
@@ -752,27 +1179,63 @@ const repuestosComponent = {
             // Agregar nuevo modal al DOM
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
-            // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('editRepuestoModal'));
-            modal.show();
+            // Mostrar modal usando método seguro
+            this.mostrarModal('editRepuestoModal');
             
         } catch (error) {
             console.error('Error al editar repuesto:', error);
-            Swal.fire('Error', 'No se pudo cargar el repuesto para editar', 'error');
+            
+            // Limpiar UI en caso de error
+            ModalManager.cleanUI();
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudo cargar el repuesto para editar: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al cargar el repuesto para editar: ' + (error.message || ''));
+            }
         }
     },
 
     async actualizarRepuesto(id) {
-        const codigo = document.getElementById('editCodigo').value;
-        const nombre = document.getElementById('editNombre').value;
-        const precio = parseFloat(document.getElementById('editPrecio').value);
-        
-        if (!codigo || !nombre || !precio) {
-            Swal.fire('Error', 'Todos los campos son requeridos', 'error');
-            return;
-        }
+        if (!id) return;
         
         try {
+            const codigo = document.getElementById('editCodigo')?.value;
+            const nombre = document.getElementById('editNombre')?.value;
+            const precioElement = document.getElementById('editPrecio');
+            const precio = precioElement ? parseFloat(precioElement.value) : 0;
+            
+            if (!codigo || !nombre || isNaN(precio)) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'Todos los campos son requeridos y el precio debe ser un número', 'error');
+                } else {
+                    alert('Todos los campos son requeridos y el precio debe ser un número');
+                }
+                return;
+            }
+            
+            // Verificar que firebase esté inicializado
+            if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') {
+                throw new Error('Firebase no está disponible');
+            }
+            
+            // Mostrar indicador de carga
+            let loadingSwal;
+            if (typeof Swal !== 'undefined') {
+                loadingSwal = Swal.fire({
+                    title: 'Actualizando...',
+                    text: 'Espere por favor',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+            
+            // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
+            this.cerrarModal('editRepuestoModal');
+            
+            // Actualizar en Firebase
             await firebase.firestore().collection('repuestos').doc(id).update({
                 codigo,
                 nombre,
@@ -780,17 +1243,40 @@ const repuestosComponent = {
                 fechaModificacion: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editRepuestoModal'));
-            modal.hide();
+            if (loadingSwal) {
+                loadingSwal.close();
+            }
             
-            Swal.fire('Éxito', 'Repuesto actualizado correctamente', 'success');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Éxito',
+                    text: 'Repuesto actualizado correctamente',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                alert('Repuesto actualizado correctamente');
+            }
             
             // Recargar la página actual
-            this.cargarRepuestosPaginados(this.currentPage);
+            try {
+                await this.cargarRepuestosPaginados(this.currentPage);
+            } catch (refreshError) {
+                console.error('Error al actualizar lista:', refreshError);
+            }
             
         } catch (error) {
             console.error('Error al actualizar repuesto:', error);
-            Swal.fire('Error', 'No se pudo actualizar el repuesto', 'error');
+            
+            // Limpiar UI en caso de error
+            ModalManager.cleanUI();
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se pudo actualizar el repuesto: ' + (error.message || ''), 'error');
+            } else {
+                alert('Error al actualizar el repuesto: ' + (error.message || ''));
+            }
         }
     },
 
@@ -803,6 +1289,14 @@ const repuestosComponent = {
                 this.searchTimeout = setTimeout(() => {
                     this.buscarRepuestos();
                 }, 500); // Esperar 500ms después de que el usuario deje de escribir
+            });
+            
+            // Buscar al presionar Enter
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.buscarRepuestos();
+                }
             });
         }
         
@@ -823,12 +1317,21 @@ const repuestosComponent = {
                 e.preventDefault();
                 uploadArea.style.backgroundColor = '';
                 
+                if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files[0]) return;
+                
                 const file = e.dataTransfer.files[0];
                 if (file && (file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
-                    document.getElementById('fileInput').files = e.dataTransfer.files;
-                    this.procesarArchivo(document.getElementById('fileInput'));
+                    const fileInput = document.getElementById('fileInput');
+                    if (fileInput) {
+                        fileInput.files = e.dataTransfer.files;
+                        this.procesarArchivo(fileInput);
+                    }
                 } else {
-                    Swal.fire('Error', 'Por favor selecciona un archivo CSV o Excel', 'error');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', 'Por favor selecciona un archivo CSV o Excel', 'error');
+                    } else {
+                        alert('Por favor selecciona un archivo CSV o Excel');
+                    }
                 }
             });
         }
