@@ -130,7 +130,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('addRepuestoModal')">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.guardarRepuesto()">Guardar</button>
                             </div>
                         </div>
@@ -173,7 +173,7 @@ const repuestosComponent = {
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('uploadModal')">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.cargarRepuestosMasivo()" disabled id="uploadBtn">Cargar Datos</button>
                             </div>
                         </div>
@@ -224,29 +224,34 @@ const repuestosComponent = {
         }
     },
 
-    // Función auxiliar para mostrar modales de forma segura
-    mostrarModal(modalId) {
-        return ModalManager.open(modalId);
-    },
-
-    // Función auxiliar para cerrar modales de forma segura
-    cerrarModal(modalId) {
-        return ModalManager.close(modalId);
-    },
-
-    // Función para limpiar UI bloqueada
-    limpiarUIBloqueada() {
-        // Usar la función global
-        ModalManager.cleanUI();
-    },
-
-    // Funciones para abrir los modales de forma segura
+    // Función para abrir modal de agregar repuesto - ACTUALIZADA para usar Bootstrap directamente
     abrirModalAgregarRepuesto() {
-        this.mostrarModal('addRepuestoModal');
+        try {
+            const modalElement = document.getElementById('addRepuestoModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        } catch (error) {
+            console.error('Error al abrir modal:', error);
+            // Si hay error, limpiar UI
+            window.resetUIState();
+        }
     },
 
+    // Función para abrir modal de carga masiva - ACTUALIZADA para usar Bootstrap directamente
     abrirModalCargaMasiva() {
-        this.mostrarModal('uploadModal');
+        try {
+            const modalElement = document.getElementById('uploadModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        } catch (error) {
+            console.error('Error al abrir modal:', error);
+            // Si hay error, limpiar UI
+            window.resetUIState();
+        }
     },
 
     agregarEstilos() {
@@ -647,7 +652,19 @@ const repuestosComponent = {
             }
             
             // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
-            this.cerrarModal('addRepuestoModal');
+            try {
+                const modalElement = document.getElementById('addRepuestoModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // En caso de error, intentar limpiar manualmente
+                window.resetUIState();
+            }
             
             // Guardar en Firebase
             await firebase.firestore().collection('repuestos').add({
@@ -693,7 +710,7 @@ const repuestosComponent = {
             console.error('Error al guardar repuesto:', error);
             
             // Limpiar UI en caso de error
-            ModalManager.cleanUI();
+            window.resetUIState();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -744,7 +761,19 @@ const repuestosComponent = {
             }
             
             // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
-            this.cerrarModal('uploadModal');
+            try {
+                const modalElement = document.getElementById('uploadModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // En caso de error, intentar limpiar manualmente
+                window.resetUIState();
+            }
             
             // Primero, obtener todos los códigos de repuestos existentes
             const snapshot = await firebase.firestore().collection('repuestos').get();
@@ -816,7 +845,7 @@ const repuestosComponent = {
             }
             
             // Asegurarse de limpiar la UI
-            ModalManager.cleanUI();
+            window.resetUIState();
             
             if (progressSwal) {
                 progressSwal.close();
@@ -853,7 +882,7 @@ const repuestosComponent = {
             console.error('Error en carga masiva:', error);
             
             // Limpiar UI en caso de error
-            ModalManager.cleanUI();
+            window.resetUIState();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', `No se pudieron cargar los repuestos: ${error.message}`, 'error');
@@ -1143,7 +1172,7 @@ const repuestosComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Editar Repuesto</h5>
-                                <button type="button" class="btn-close" onclick="repuestosComponent.cerrarModal('editRepuestoModal')"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="editRepuestoForm">
@@ -1162,7 +1191,7 @@ const repuestosComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="repuestosComponent.cerrarModal('editRepuestoModal')">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="repuestosComponent.actualizarRepuesto('${id}')">Actualizar</button>
                             </div>
                         </div>
@@ -1179,14 +1208,29 @@ const repuestosComponent = {
             // Agregar nuevo modal al DOM
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
-            // Mostrar modal usando método seguro
-            this.mostrarModal('editRepuestoModal');
+            // Mostrar modal usando Bootstrap directamente
+            try {
+                const modalElement = document.getElementById('editRepuestoModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                }
+            } catch (error) {
+                console.error('Error al mostrar modal:', error);
+                window.resetUIState();
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
+                } else {
+                    alert('Error al mostrar el formulario de edición');
+                }
+            }
             
         } catch (error) {
             console.error('Error al editar repuesto:', error);
             
             // Limpiar UI en caso de error
-            ModalManager.cleanUI();
+            window.resetUIState();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo cargar el repuesto para editar: ' + (error.message || ''), 'error');
@@ -1233,7 +1277,19 @@ const repuestosComponent = {
             }
             
             // IMPORTANTE: Cerrar modal ANTES de interactuar con Firebase
-            this.cerrarModal('editRepuestoModal');
+            try {
+                const modalElement = document.getElementById('editRepuestoModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // En caso de error, intentar limpiar manualmente
+                window.resetUIState();
+            }
             
             // Actualizar en Firebase
             await firebase.firestore().collection('repuestos').doc(id).update({
@@ -1270,7 +1326,7 @@ const repuestosComponent = {
             console.error('Error al actualizar repuesto:', error);
             
             // Limpiar UI en caso de error
-            ModalManager.cleanUI();
+            window.resetUIState();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo actualizar el repuesto: ' + (error.message || ''), 'error');
