@@ -68,6 +68,9 @@
 <!-- Librería para generar PDFs - DEBE IR ANTES DE TUS SCRIPTS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+<!-- Sistema de gestión de modales para toda la aplicación -->
+<script src="js/services/modal-manager.js"></script>
+
 <!-- Tus scripts en el orden correcto -->
 <script src="js/services/firebase-config.js"></script>
 <script src="js/storage.js"></script>
@@ -91,7 +94,7 @@
 
     <!-- Sistema de recuperación de UI -->
     <div id="emergencyReset" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999; display: none;">
-        <button onclick="window.emergencyResetUI()" class="btn btn-danger">
+        <button onclick="window.resetUIState()" class="btn btn-danger">
             <i class="fas fa-exclamation-triangle"></i> Reiniciar UI
         </button>
     </div>
@@ -100,57 +103,6 @@
     <script>
     // Sistema de recuperación de UI bloqueada
     (function() {
-        // Funciones globales para resetear la UI
-        window.emergencyResetUI = function() {
-            console.log('Ejecutando recuperación de emergencia de la UI');
-            
-            // Cerrar todos los modales
-            try {
-                var modals = document.querySelectorAll('.modal');
-                modals.forEach(function(modal) {
-                    try {
-                        if (typeof bootstrap !== 'undefined') {
-                            var modalInstance = bootstrap.Modal.getInstance(modal);
-                            if (modalInstance) {
-                                modalInstance.hide();
-                            }
-                        }
-                        // Fallback si bootstrap no está disponible
-                        modal.style.display = 'none';
-                        modal.classList.remove('show');
-                        modal.setAttribute('aria-hidden', 'true');
-                        modal.removeAttribute('aria-modal');
-                    } catch(e) {
-                        console.error('Error al cerrar modal:', e);
-                    }
-                });
-            
-                // Remover backdrops
-                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-            } catch(e) {
-                console.error('Error al limpiar modales:', e);
-            }
-            
-            // Ocultar botón de emergencia
-            document.getElementById('emergencyReset').style.display = 'none';
-            
-            // Recargar componente actual o ir al dashboard
-            if (typeof router !== 'undefined') {
-                try {
-                    const currentRoute = window.location.hash.slice(1) || 'dashboard';
-                    router.navigate(currentRoute);
-                } catch(e) {
-                    console.error('Error al navegar:', e);
-                    // Si falla la navegación, recargar la página como último recurso
-                    if (confirm('¿Deseas recargar la página completa?')) {
-                        window.location.reload();
-                    }
-                }
-            }
-        };
-        
         // Detectar posibles bloqueos de UI
         let uiBlockDetector = {
             lastActivity: Date.now(),
@@ -216,8 +168,5 @@
         }
     })();
     </script>
-
-    <!-- Sistema de gestión segura de modales para toda la aplicación - ELIMINAR ESTA SECCIÓN -->
-    <!-- NO USAR: El código para modal-manager.js ha sido eliminado -->
 </body>
 </html>
