@@ -57,82 +57,138 @@
     </main>
     
     <!-- Bootstrap JavaScript Bundle con Popper -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Firebase Scripts -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-<!-- Librería para generar PDFs -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Librería para generar PDFs - DEBE IR ANTES DE TUS SCRIPTS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-<!-- NUEVO: Sistema de gestión de modales mejorado -->
-<script src="js/modal-manager.js"></script>
+    <!-- MEJORADO: Sistema de gestión de modales y focus (incluir primero) -->
+    <script src="js/modal-manager.js"></script>
+    <script src="js/focus-manager.js"></script>
 
-<!-- Tus scripts en el orden correcto -->
-<script src="js/services/firebase-config.js"></script>
-<script src="js/storage.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/router.js"></script>
-<script src="js/components/dashboard.js"></script>
-<script src="js/components/requerimientos.js"></script>
-<script src="js/components/cotizaciones.js"></script>
-<script src="js/components/clientes.js"></script>
-<script src="js/components/busqueda.js"></script>
-<script src="js/components/locales.js"></script>
-<script src="js/components/repuestos.js"></script>
-<script src="js/components/nuevo-cliente.js"></script>
-<!-- IMPORTANTE: Agregar el generador de PDF -->
-<script src="js/components/pdf-generator.js"></script>
-<!-- La aplicación principal DEBE ir al final -->
-<script src="js/app.js"></script>
+    <!-- Tus scripts en el orden correcto -->
+    <script src="js/services/firebase-config.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/router.js"></script>
+    <script src="js/components/dashboard.js"></script>
+    <script src="js/components/requerimientos.js"></script>
+    <script src="js/components/cotizaciones.js"></script>
+    <script src="js/components/clientes.js"></script>
+    <script src="js/components/busqueda.js"></script>
+    <script src="js/components/locales.js"></script>
+    <script src="js/components/repuestos.js"></script>
+    <script src="js/components/nuevo-cliente.js"></script>
+    <!-- IMPORTANTE: Agregar el generador de PDF -->
+    <script src="js/components/pdf-generator.js"></script>
+    <!-- La aplicación principal DEBE ir al final -->
+    <script src="js/app.js"></script>
 
     <!-- Opcional: Agregar un favicon para evitar errores 404 -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
 
-    <!-- Script de diagnóstico -->
+    <!-- Sistema de recuperación de UI mejorado -->
+    <div id="emergencyReset" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999; display: none;">
+        <button onclick="FocusManager.resetUI()" class="btn btn-danger">
+            <i class="fas fa-exclamation-triangle"></i> Reiniciar UI
+        </button>
+    </div>
+
+    <!-- Sistema de detección y recuperación automática de problemas UI -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('Sistema cargado correctamente');
-        
-        // Verificar que todas las dependencias estén cargadas
-        const dependencias = {
-            'Bootstrap': typeof bootstrap !== 'undefined',
-            'Firebase': typeof firebase !== 'undefined',
-            'ModalManager': typeof ModalManager !== 'undefined',
-            'jsPDF': typeof window.jspdf !== 'undefined',
-            'SweetAlert2': typeof Swal !== 'undefined',
-            'SheetJS': typeof XLSX !== 'undefined'
-        };
-        
-        console.table(dependencias);
-        
-        // Verificar componentes principales
-        const componentes = {
-            'Router': typeof router !== 'undefined',
-            'Auth': typeof auth !== 'undefined',
-            'Storage': typeof storage !== 'undefined'
-        };
-        
-        console.table(componentes);
-        
-        // Mostrar advertencia si faltan dependencias críticas
-        const faltantes = Object.entries(dependencias)
-            .filter(([_, loaded]) => !loaded)
-            .map(([name]) => name);
-            
-        if (faltantes.length > 0) {
-            console.warn('ADVERTENCIA: Las siguientes dependencias no están cargadas:', faltantes);
-            
-            // Mostrar alerta al usuario solo si faltan componentes críticos
-            if (!dependencias['Bootstrap'] || !dependencias['Firebase'] || !dependencias['ModalManager']) {
-                setTimeout(() => {
-                    alert('Algunas dependencias críticas no se han cargado correctamente. Es posible que el sistema no funcione como se espera. Por favor, recargue la página o contacte al administrador.');
-                }, 1000);
+        // Detectar Ctrl+Alt+U para mostrar botón de emergencia
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.altKey && e.key === 'u') {
+                document.getElementById('emergencyReset').style.display = 'block';
             }
-        }
+        });
+
+        // Detectar Ctrl+Alt+I para resetear inmediatamente
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.altKey && e.key === 'i') {
+                console.log("🔄 Reinicio de emergencia activado por atajo de teclado");
+                if (window.FocusManager && typeof FocusManager.resetUI === 'function') {
+                    FocusManager.resetUI();
+                } else {
+                    // Fallback si FocusManager no está disponible
+                    emergencyUIReset();
+                }
+                
+                // Notificar al usuario
+                const notification = document.createElement('div');
+                notification.className = 'ui-reset-notification';
+                notification.textContent = 'Interfaz reiniciada correctamente';
+                notification.style = `
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #4CAF50;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 4px;
+                    z-index: 99999;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                `;
+                document.body.appendChild(notification);
+                
+                // Eliminar notificación después de 3 segundos
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            }
+        });
+        
+        // Función de respaldo para reinicio de emergencia
+        window.emergencyUIReset = function() {
+            console.log("🚨 REINICIO DE EMERGENCIA EJECUTADO");
+            
+            // 1. Limpiar modales y backdrops
+            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+                modal.removeAttribute('aria-modal');
+            });
+            
+            // 2. Restaurar el body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            
+            // 3. Restaurar foco al body
+            document.body.focus();
+            
+            return true;
+        };
+        
+        // Detector automático de problemas de UI bloqueada (además de FocusManager)
+        setInterval(function() {
+            // Detectar backdrops huérfanos
+            const hasBackdrop = document.querySelectorAll('.modal-backdrop').length > 0;
+            const hasVisibleModal = document.querySelectorAll('.modal.show').length > 0;
+            
+            if (hasBackdrop && !hasVisibleModal) {
+                console.warn("UI bloqueada detectada - limpiando automáticamente");
+                window.emergencyUIReset();
+            }
+            
+            // Detectar clase modal-open sin modales
+            if (document.body.classList.contains('modal-open') && !hasVisibleModal) {
+                console.warn("Body tiene clase modal-open sin modales visibles - limpiando");
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+        }, 5000);  // Verificar cada 5 segundos
     });
     </script>
 </body>
