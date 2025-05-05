@@ -1,4 +1,4 @@
-// Componente de Gestión de Repuestos - Versión con Bootstrap para modales
+// Componente de Gestión de Repuestos - Versión Optimizada con Bootstrap para modales
 const repuestosComponent = {
     datosTemporales: [],
     currentPage: 1,
