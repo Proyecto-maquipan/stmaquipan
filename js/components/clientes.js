@@ -69,7 +69,7 @@ const clientesComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Agregar Nuevo Cliente</h5>
-                                <button type="button" class="btn-close" onclick="ModalManager.close('addClienteModal')"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="addClienteForm">
@@ -113,7 +113,7 @@ const clientesComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('addClienteModal')">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="clientesComponent.guardarCliente()">Guardar</button>
                             </div>
                         </div>
@@ -126,7 +126,7 @@ const clientesComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Carga Masiva de Clientes</h5>
-                                <button type="button" class="btn-close" onclick="ModalManager.close('uploadModal')"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body">
                                 <div class="alert alert-info">
@@ -160,7 +160,7 @@ const clientesComponent = {
                                 </div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('uploadModal')">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="clientesComponent.cargarClientesMasivo()" disabled id="uploadBtn">Cargar Datos</button>
                             </div>
                         </div>
@@ -203,37 +203,35 @@ const clientesComponent = {
             `;
         }
     },
-    
-    // Métodos para manejar modales
+
+    // Función para abrir modal de agregar cliente - ACTUALIZADA para usar Bootstrap directamente
     abrirModalAgregarCliente() {
-        // Limpiar el formulario
-        const form = document.getElementById('addClienteForm');
-        if (form) {
-            form.reset();
+        try {
+            const modalElement = document.getElementById('addClienteModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        } catch (error) {
+            console.error('Error al abrir modal:', error);
+            // Si hay error, limpiar UI
+            window.resetUIState();
         }
-        ModalManager.open('addClienteModal');
     },
-    
+
+    // Función para abrir modal de carga masiva - ACTUALIZADA para usar Bootstrap directamente
     abrirModalCargaMasiva() {
-        // Limpiar el área de preview
-        const previewArea = document.getElementById('previewArea');
-        if (previewArea) {
-            previewArea.style.display = 'none';
+        try {
+            const modalElement = document.getElementById('uploadModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        } catch (error) {
+            console.error('Error al abrir modal:', error);
+            // Si hay error, limpiar UI
+            window.resetUIState();
         }
-        
-        // Limpiar el input de archivo
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) {
-            fileInput.value = '';
-        }
-        
-        // Deshabilitar el botón de carga
-        const uploadBtn = document.getElementById('uploadBtn');
-        if (uploadBtn) {
-            uploadBtn.disabled = true;
-        }
-        
-        ModalManager.open('uploadModal');
     },
     
     agregarEstilos() {
@@ -414,23 +412,26 @@ const clientesComponent = {
                 });
             }
             
-            // Datos del cliente
-            const cliente = {
-                rut,
-                razonSocial,
-                direccion,
-                ciudad,
-                contacto,
-                telefono,
-                email,
-                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
-            };
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
+            try {
+                const modalElement = document.getElementById('addClienteModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                window.resetUIState();
+            }
             
             // Verificar si el RUT ya existe
             try {
                 // Agregar tiempo de espera máximo
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Tiempo de espera agotado')), 8000)
+                    setTimeout(() => reject(new Error('Tiempo de espera agotado al verificar RUT')), 8000)
                 );
                 
                 // Intentar obtener clientes con storage primero
@@ -466,6 +467,18 @@ const clientesComponent = {
                 console.error('Error al verificar duplicados:', checkError);
                 // Continuar con la operación a pesar del error de verificación
             }
+            
+            // Datos del cliente
+            const cliente = {
+                rut,
+                razonSocial,
+                direccion,
+                ciudad,
+                contacto,
+                telefono,
+                email,
+                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+            };
             
             // Guardar en Firebase
             try {
@@ -507,9 +520,6 @@ const clientesComponent = {
                     throw new Error('No hay método disponible para guardar');
                 }
                 
-                // Cerrar modal
-                ModalManager.close('addClienteModal');
-                
                 // Resetear formulario
                 const form = document.getElementById('addClienteForm');
                 if (form) {
@@ -541,9 +551,6 @@ const clientesComponent = {
                 } else {
                     alert('Error al guardar el cliente: ' + (error.message || ''));
                 }
-                
-                // Limpiar manualmente en caso de error
-                ModalManager.cleanUI();
             }
         } catch (error) {
             console.error('Error al procesar guardado de cliente:', error);
@@ -554,8 +561,8 @@ const clientesComponent = {
                 alert('Error al procesar la solicitud: ' + (error.message || ''));
             }
             
-            // Limpiar manualmente en caso de error global
-            ModalManager.cleanUI();
+            // Limpiar manualmente en caso de error
+            window.resetUIState();
         }
     },
     
@@ -735,8 +742,7 @@ const clientesComponent = {
             `;
         });
         
-        if (datos.length > 5) {
-            previewTableBody.innerHTML += `
+        if (datos.length > 5) {previewTableBody.innerHTML += `
                 <tr>
                     <td colspan="7" class="text-center">...y ${datos.length - 5} más</td>
                 </tr>
@@ -781,8 +787,20 @@ const clientesComponent = {
                 });
             }
             
-            // MODIFICADO: Cerrar modal usando ModalManager
-            ModalManager.close('uploadModal');
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
+            try {
+                const modalElement = document.getElementById('uploadModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente en caso de error
+                window.resetUIState();
+            }
             
             // Obtener clientes existentes para verificar RUTs duplicados
             let clientesExistentes = [];
@@ -923,25 +941,14 @@ const clientesComponent = {
                 }
             }
             
-            // Cerrar modal y limpiar el UI
-            ModalManager.cleanUI();
-            
             if (progressSwal) {
                 progressSwal.close();
             }
             
-            if (errores > 0) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Completado con advertencias', `${procesados} clientes cargados correctamente. ${errores} registros no pudieron procesarse debido a datos incompletos o RUTs duplicados.`, 'warning');
-                } else {
-                    alert(`Completado con advertencias: ${procesados} clientes cargados, ${errores} errores`);
-                }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Éxito', `${procesados} clientes cargados correctamente. ${errores} registros no pudieron procesarse debido a datos incompletos o RUTs duplicados.`, errores > 0 ? 'warning' : 'success');
             } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire('Éxito', `${procesados} clientes cargados correctamente`, 'success');
-                } else {
-                    alert(`Éxito: ${procesados} clientes cargados correctamente`);
-                }
+                alert(`Proceso completado: ${procesados} clientes cargados, ${errores} errores`);
             }
             
             // Recargar datos
@@ -965,9 +972,8 @@ const clientesComponent = {
         } catch (error) {
             console.error('Error en carga masiva:', error);
             
-            // Limpiar manualmente en caso de error
-            // MODIFICADO: Usar ModalManager para limpiar el UI
-            ModalManager.cleanUI();
+            // Limpiar UI en caso de error
+            window.resetUIState();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', `No se pudieron cargar los clientes: ${error.message}`, 'error');
@@ -1161,7 +1167,7 @@ const clientesComponent = {
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Editar Cliente</h5>
-                                <button type="button" class="btn-close" onclick="ModalManager.close('editClienteModal')"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body">
                                 <form id="editClienteForm">
@@ -1205,7 +1211,7 @@ const clientesComponent = {
                                 </form>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" onclick="ModalManager.close('editClienteModal')">Cancelar</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="clientesComponent.actualizarCliente('${cliente.id}')">Guardar Cambios</button>
                             </div>
                         </div>
@@ -1222,16 +1228,31 @@ const clientesComponent = {
             // Agregar nuevo modal al DOM
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             
-            // Mostrar modal
-            // MODIFICADO: Usar ModalManager para abrir el modal
-            ModalManager.open('editClienteModal');
+            // Mostrar modal usando Bootstrap directamente
+            try {
+                const modalElement = document.getElementById('editClienteModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                }
+            } catch (error) {
+                console.error('Error al mostrar modal:', error);
+                window.resetUIState();
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', 'No se pudo mostrar el formulario de edición', 'error');
+                } else {
+                    alert('Error al mostrar el formulario de edición');
+                }
+            }
             
         } catch (error) {
             console.error('Error al editar cliente:', error);
+            
             if (typeof Swal !== 'undefined') {
-                Swal.fire('Error', 'No se pudo cargar el cliente para editar', 'error');
+                Swal.fire('Error', 'No se pudo cargar el cliente para editar: ' + (error.message || ''), 'error');
             } else {
-                alert('Error al mostrar el formulario de edición');
+                alert('Error al cargar el cliente para editar: ' + (error.message || ''));
             }
         }
     },
@@ -1240,11 +1261,6 @@ const clientesComponent = {
         if (!id) return;
         
         try {
-            // Verificar si hay disponible algún servicio de almacenamiento
-            if (typeof storage === 'undefined' && typeof FirebaseService === 'undefined' && typeof firebase === 'undefined') {
-                throw new Error('Servicio de almacenamiento no está disponible');
-            }
-            
             const rut = document.getElementById('editRut')?.value;
             const razonSocial = document.getElementById('editRazonSocial')?.value;
             const direccion = document.getElementById('editDireccion')?.value;
@@ -1331,6 +1347,21 @@ const clientesComponent = {
                 });
             }
             
+            // IMPORTANTE: Cerrar modal ANTES de operaciones asíncronas
+            try {
+                const modalElement = document.getElementById('editClienteModal');
+                if (modalElement) {
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            } catch (modalError) {
+                console.error('Error al cerrar modal:', modalError);
+                // Limpiar manualmente
+                window.resetUIState();
+            }
+            
             // Datos del cliente
             const clienteData = {
                 rut,
@@ -1354,10 +1385,6 @@ const clientesComponent = {
                 throw new Error('No hay método disponible para actualizar');
             }
             
-            // Cerrar modal
-            // MODIFICADO: Usar ModalManager para cerrar el modal
-            ModalManager.close('editClienteModal');
-            
             if (loadingSwal) {
                 loadingSwal.close();
             }
@@ -1374,9 +1401,8 @@ const clientesComponent = {
         } catch (error) {
             console.error('Error al actualizar cliente:', error);
             
-            // Limpiar UI en caso de error
-            // MODIFICADO: Usar ModalManager para limpiar el UI
-            ModalManager.cleanUI();
+            // Limpiar manualmente en caso de error
+            window.resetUIState();
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire('Error', 'No se pudo actualizar el cliente: ' + (error.message || ''), 'error');
@@ -1547,3 +1573,4 @@ const clientesComponent = {
         }
     }
 };
+            
