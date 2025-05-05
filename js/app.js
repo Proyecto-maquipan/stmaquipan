@@ -37,8 +37,17 @@ document.addEventListener('DOMContentLoaded', function() {
     router.register('nuevo-cliente', nuevoClienteComponent);
     router.register('busqueda', busquedaComponent);
     router.register('login', loginComponent);
-    // IMPORTANTE: Registrar la ruta de repuestos
+    // IMPORTANTE: Registrar las rutas de repuestos y locales
     router.register('repuestos', repuestosComponent);
+    router.register('locales', localesComponent);
+    router.register('locales-cliente', localesComponent);
+    
+    // Registrar rutas de edición/visualización con parámetros
+    router.register('editar-cliente', clientesComponent);
+    router.register('ver-requerimiento', requerimientosComponent);
+    router.register('editar-requerimiento', requerimientosComponent);
+    router.register('ver-cotizacion', cotizacionesComponent);
+    router.register('editar-cotizacion', cotizacionesComponent);
     
     // Cargar datos de ejemplo
     cargarDatosEjemplo();
@@ -106,7 +115,11 @@ const loginComponent = {
             auth.updateUserInfo();
             router.navigate('dashboard');
         } else {
-            alert('Usuario o contraseña incorrectos');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'Usuario o contraseña incorrectos', 'error');
+            } else {
+                alert('Usuario o contraseña incorrectos');
+            }
         }
     }
 };
@@ -114,24 +127,78 @@ const loginComponent = {
 // Función para generar PDF de requerimiento (ejemplo básico)
 // Modificada para ser async
 async function generarPDF(reqId) {
-    const requerimientos = await storage.getRequerimientos();
-    const requerimiento = requerimientos.find(r => r.id === reqId);
-    if (requerimiento) {
-        // En una implementación real, aquí usaríamos una librería como jsPDF
-        alert(`Generando PDF para requerimiento ${reqId}...\n` +
-              `Este es un ejemplo. En producción, se generaría un PDF real.`);
+    try {
+        const requerimientos = await storage.getRequerimientos();
+        const requerimiento = requerimientos.find(r => r.id === reqId);
+        if (requerimiento) {
+            // En una implementación real, aquí usaríamos una librería como jsPDF
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Generando PDF',
+                    text: `Generando PDF para requerimiento ${reqId}...`,
+                    icon: 'info',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            } else {
+                alert(`Generando PDF para requerimiento ${reqId}...\n` +
+                    `Este es un ejemplo. En producción, se generaría un PDF real.`);
+            }
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se encontró el requerimiento especificado', 'error');
+            } else {
+                alert('No se encontró el requerimiento especificado');
+            }
+        }
+    } catch (error) {
+        console.error('Error al generar PDF:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', 'No se pudo generar el PDF: ' + error.message, 'error');
+        } else {
+            alert('Error al generar el PDF: ' + error.message);
+        }
     }
 }
 
 // Función para generar PDF de cotización (ejemplo básico)
 // Modificada para ser async
 async function generarPDFCotizacion(numero) {
-    const cotizaciones = await storage.getCotizaciones();
-    const cotizacion = cotizaciones.find(c => c.numero === numero);
-    if (cotizacion) {
-        // En una implementación real, aquí usaríamos una librería como jsPDF
-        alert(`Generando PDF para cotización ${numero}...\n` +
-              `Este es un ejemplo. En producción, se generaría un PDF real.`);
+    try {
+        const cotizaciones = await storage.getCotizaciones();
+        const cotizacion = cotizaciones.find(c => c.numero === numero);
+        if (cotizacion) {
+            // En una implementación real, aquí usaríamos la librería jsPDF
+            if (typeof cotizacionPDF !== 'undefined' && typeof cotizacionPDF.generarPDF === 'function') {
+                cotizacionPDF.generarPDF(cotizacion);
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Generando PDF',
+                        text: `Generando PDF para cotización ${numero}...`,
+                        icon: 'info',
+                        showConfirmButton: false,
+                        timer: 2000
+                    });
+                } else {
+                    alert(`Generando PDF para cotización ${numero}...\n` +
+                        `Este es un ejemplo. En producción, se generaría un PDF real.`);
+                }
+            }
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', 'No se encontró la cotización especificada', 'error');
+            } else {
+                alert('No se encontró la cotización especificada');
+            }
+        }
+    } catch (error) {
+        console.error('Error al generar PDF:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', 'No se pudo generar el PDF: ' + error.message, 'error');
+        } else {
+            alert('Error al generar el PDF: ' + error.message);
+        }
     }
 }
 
@@ -168,6 +235,54 @@ async function cargarDatosEjemplo() {
                 telefono: '226547890',
                 email: 'maria.gonzalez@tottus.cl'
             });
+        }
+        
+        // Si existe la colección de locales, verificar si hay datos
+        try {
+            // Verificar si la función getLocales existe
+            if (typeof storage.getLocales === 'function') {
+                const locales = await storage.getLocales();
+                
+                // Si no hay locales y hay clientes, agregar algunos locales de ejemplo
+                if (locales && locales.length === 0 && clientes && clientes.length > 0) {
+                    console.log('Agregando locales de ejemplo...');
+                    
+                    // Buscar el cliente CENCOSUD
+                    const cencosud = clientes.find(c => c.razonSocial.includes('CENCOSUD'));
+                    if (cencosud) {
+                        await storage.saveLocal({
+                            clienteId: cencosud.id,
+                            nombre: 'Jumbo Alto Las Condes',
+                            direccion: 'Av. Kennedy 9001, Las Condes',
+                            contacto: 'Carlos Pérez',
+                            telefono: '229590111',
+                            email: 'carlos.perez@cencosud.cl',
+                            tipo: 'retail',
+                            numeroCuenta: 'CEN-001',
+                            numeroLocal: 'LC-101'
+                        });
+                    }
+                    
+                    // Buscar el cliente TOTTUS
+                    const tottus = clientes.find(c => c.razonSocial.includes('TOTTUS'));
+                    if (tottus) {
+                        await storage.saveLocal({
+                            clienteId: tottus.id,
+                            nombre: 'Tottus Mall Plaza Oeste',
+                            direccion: 'Mall Plaza Oeste, Cerrillos',
+                            contacto: 'Ana Gómez',
+                            telefono: '226547000',
+                            email: 'ana.gomez@tottus.cl',
+                            tipo: 'retail',
+                            numeroCuenta: 'TOT-001',
+                            numeroLocal: 'LC-201'
+                        });
+                    }
+                }
+            }
+        } catch (localesError) {
+            console.warn('No se pudieron cargar locales de ejemplo:', localesError);
+            // No interrumpir el proceso si falla la carga de locales
         }
     } catch (error) {
         console.error('Error cargando datos de ejemplo:', error);
